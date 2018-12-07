@@ -526,5 +526,129 @@ def Day6b():
 
     print "Found {c} positions in region of interest".format(c=cPosUnder)
 
+def LPair7():
+    """Return a list of pairs of the form (X,Y) meaning that X must happen before Y"""
+
+    str0 = ain.s_strIn7
+
+    lPair = []
+    for str1 in str0.strip().split('\n'):
+        lPart = str1.split()
+        lPair.append((lPart[1], lPart[7]))
+
+    return lPair
+
+def Day7a():
+    """Calculate the "ordering string" for the sequence of steps listed, all of the form X before Y, such that
+    the alphabetically earliest of the available options is taken at each point until the whole graph is done."""
+
+    lPair = LPair7()
+
+    # convert pairs into a mapping from step to set of prereq steps; ensure that all listed steps are actually
+    #  in the map for completeness
+
+    mpStepSetPre = {}
+    setStepAll = set()
+    for step0, step1 in lPair:
+        mpStepSetPre.setdefault(step1, set()).add(step0)
+        mpStepSetPre.setdefault(step0, set())
+        setStepAll.add(step0)
+        setStepAll.add(step1)
+
+    # loop calculating available (prereq met) steps and then marking alpha first complete
+
+    setStepDone = set()
+    lStepDone = []
+
+    while setStepDone != setStepAll:
+        # calculate available steps
+
+        setStepAvail = set()
+        for step, setPre in mpStepSetPre.items():
+            if setPre & setStepDone == setPre and step not in setStepDone:
+                setStepAvail.add(step)
+
+        # mark a step complete
+
+        lStep = sorted(setStepAvail)
+        print "Available steps: {steps}".format(steps=str(lStep))
+
+        lStepDone.append(lStep[0])
+        setStepDone.add(lStep[0])
+
+    print 'Final sequence:'
+    print ''.join(lStepDone)
+
+def Day7b():
+    """So, using the same prereq logic as before, but assigning time cost and 5 workers, how long will it take before all is done?"""
+
+    # NOTE (davidm) the order of completion may not be the same as before! Gah!
+    # cost (in time) to complete step N = 60 + ord(N) - 65
+
+    lPair = LPair7()
+
+    # convert pairs into a mapping from step to set of prereq steps; ensure that all listed steps are actually
+    #  in the map for completeness
+
+    mpStepSetPre = {}
+    setStepAll = set()
+    for step0, step1 in lPair:
+        mpStepSetPre.setdefault(step1, set()).add(step0)
+        mpStepSetPre.setdefault(step0, set())
+        setStepAll.add(step0)
+        setStepAll.add(step1)
+
+    # loop calculating available (prereq met) steps and then marking alpha first complete
+
+    setStepDone = set()
+    mpStepT = {}
+    lStepDone = []
+    tNow = 0
+
+    while setStepDone != setStepAll:
+        # calculate available steps
+
+        setStepAvail = set()
+        for step, setPre in mpStepSetPre.items():
+            if setPre & setStepDone == setPre and step not in setStepDone:
+                setStepAvail.add(step)
+
+        # calculate what step(s) can be started; recall that we don't start steps
+        #  that are currently running because they're currently running (got this wrong the first time!)
+
+        lStep = sorted(setStepAvail - set(mpStepT.keys()))
+        print "Available steps: {steps}".format(steps=str(lStep))
+
+        cActive = len(mpStepT.keys())
+        cStepNew = 5 - cActive
+        lStep = lStep[:5]
+
+        print "Starting steps {steps}".format(steps=str(lStep))
+
+        # mark steps active
+
+        for step in lStep:
+            mpStepT[step] = tNow + 60 + ord(step) - 64
+
+        # sort steps in order by when they end
+
+        lTStep = [(t, step) for step, t in mpStepT.items()]
+        lTStep.sort()
+
+        # mark all steps that are done at the earliest time as done, and advance to that
+        #  time
+
+        tNow = lTStep[0][0]
+
+        for t, step in lTStep:
+            if t != tNow:
+                break
+
+            print "Marking {step} done at {t}".format(step=step, t=t)
+            setStepDone.add(step)
+            del(mpStepT[step])
+
+        print "Ending time: {t}".format(t=tNow)
+
 if __name__ == '__main__':
-    Day6b()
+    Day7b()
