@@ -813,6 +813,19 @@ def Day9b():
     # what the appropriate sub-pattern is there. The "move back 7" thing, combined with the "move forward two" thing
     # ends up with my noodle being pretty thoroughly baked.
 
+    # Couple further thoughts: the pattern of marbles that comes out is constant with respect to number of
+    # players, so I shouldn't factor anything of particular note in there. If I can instead generate the
+    # pattern of marbles coming out, I can then splatter that into the players to calculate the scores.
+
+    # There is a surprising number of "plus 8" values in what I see. Unfortunately, that pattern is also irregular
+    # so I'm currently unable to make much of it. Maybe that has something to do with the fact that we're going back
+    # 7 values? Not super clear to me that's the case. The edit when the marble is removed, plus the 23 multiple that
+    # never goes in, are both super crazy baking to my brain. I guess on the plus side, that means that every 23 marbles
+    # we're actually minus two, not just one, so maybe there's a "mod 21" in there somewhere that makes all of this
+    # stuff make sense? Hmm. I really feel like I'm just grasping at straws on this one.
+
+    # I suppose I could also see if there's a better pattern in the "gained values" that we get out (the 23 + removed).
+
     nMarbleMax = 7162800 + 1
     cPlayer = 448
 
@@ -824,28 +837,34 @@ def Day9b():
     iPlayer = 0
     nMarble = 1
 
+    lNRemoved = []
+    lNRemoved2 = []
+
     while nMarble < nMarbleMax:
         if nMarble % 23 == 0:
             # scoring round
             score = nMarble
+            lNRemoved2.append(score)
 
             mpIPlayerLN.setdefault(iPlayer, []).append(nMarble)
 
             iNCur = (iNCur + len(lNCircle) - 7) % len(lNCircle)
             score += lNCircle[iNCur]
             mpIPlayerLN[iPlayer].append(lNCircle[iNCur])
+            lNRemoved.append(lNCircle[iNCur])
+            lNRemoved2[-1] += lNCircle[iNCur]
 
             lNCircle[iNCur:iNCur+1] = []
 
             mpIPlayerScore[iPlayer] = mpIPlayerScore.get(iPlayer, 0) + score
 
-            print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
-            print "  pieces: {ln}".format(ln=str(mpIPlayerLN[iPlayer]))
-            print "  pieces: {ln}".format(ln=str(sorted(mpIPlayerLN[iPlayer])))
-            print "  pieces mod  23: {ln}".format(ln=["{0:5n}".format(x % 23) for x in (mpIPlayerLN[iPlayer])])
-            print "  pieces mod 448: {ln}".format(ln=["{0:5n}".format(x % 448) for x in (mpIPlayerLN[iPlayer])])
-            print "  pieces mod   Z: {ln}".format(ln=["{0:5n}".format(x % (448 % 23)) for x in (mpIPlayerLN[iPlayer])])
-            print "  pieces mod   7: {ln}".format(ln=["{0:5n}".format(x % 7) for x in (mpIPlayerLN[iPlayer])])
+            #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
+            #print "  pieces: {ln}".format(ln=str(mpIPlayerLN[iPlayer]))
+            #print "  pieces: {ln}".format(ln=str(sorted(mpIPlayerLN[iPlayer])))
+            #print "  pieces mod  23: {ln}".format(ln=["{0:5n}".format(x % 23) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod 448: {ln}".format(ln=["{0:5n}".format(x % 448) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod   Z: {ln}".format(ln=["{0:5n}".format(x % (448 % 23)) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod   7: {ln}".format(ln=["{0:5n}".format(x % 7) for x in (mpIPlayerLN[iPlayer])])
 
             #print lNCircle
 
@@ -857,8 +876,10 @@ def Day9b():
             lNCircle[iNCur:iNCur] = [nMarble]
             #print lNCircle
 
-        if nMarble == 90000:
+        if nMarble == 3000:
             print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
+            print "Marbles removed (non-mod-23 ones): {ln}".format(ln=lNRemoved)
+            print "Scores gained: {ln}".format(ln=lNRemoved2)
             break
 
         # advance marble and player
