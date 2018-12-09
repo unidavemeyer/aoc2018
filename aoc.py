@@ -825,6 +825,20 @@ def Day9b():
     # stuff make sense? Hmm. I really feel like I'm just grasping at straws on this one.
 
     # I suppose I could also see if there's a better pattern in the "gained values" that we get out (the 23 + removed).
+    # I tried looking at that, and once again, there are hopeful bits, but nothing that's directly jumping out at me as
+    # the actual solution.
+
+    # So, I'm going to investigate a different approach. I believe that I can (plus or minus) calculate what positional index
+    # in the resulting list I should have for any given value, based on the highest value in the chain...maybe. The trick here
+    # is that I'm not convinced (yet) that I can actually calculate that for sure, because I'm not certain which indices will
+    # actually be removed as I'm calculating things. But what I *do* notice is that 0 is always at index 0 (unless maybe it gets
+    # removed at some point), and (pre-23 removal) I have powers of two as the 1 index, with (obviously) all of the odd indices
+    # progressing upwards one-at-a-time from that "anchor" value. The even indices, if we divide them by two, follow the same
+    # pattern. The %23 removal step (with its additional removed value) throw all of that into a bit of disarray, unfortunately,
+    # which is where things get tricky for me to understand.
+
+    # maybe there *is* an N%M sum thing that I could come up with that makes the pattern of the totals and/or the extras?
+    # or maybe the remove-7 number is something based on the 23 multiple that's removed?
 
     nMarbleMax = 7162800 + 1
     cPlayer = 448
@@ -880,6 +894,7 @@ def Day9b():
             print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
             print "Marbles removed (non-mod-23 ones): {ln}".format(ln=lNRemoved)
             print "Scores gained: {ln}".format(ln=lNRemoved2)
+            print "Differences (n*23 - m7): {ln}".format(ln=[23 * (i+1) - n for i, n in enumerate(lNRemoved)])
             break
 
         # advance marble and player
