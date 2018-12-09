@@ -650,5 +650,105 @@ def Day7b():
 
         print "Ending time: {t}".format(t=tNow)
 
+class Tree8:    # tag = t8
+    def __init__(self):
+        self.m_lT8Child = []
+        self.m_lNData = []
+        self.m_tcCache = None
+
+    def Populate(self, strIn):
+        """Given an encoded tree as input, assemble this tree as the root node, with child nodes underneath"""
+
+        lN = [int(x) for x in strIn.strip().split()]
+
+        self.Consume(lN)
+
+    def Consume(self, lN):
+        """Consume appropriate entries of lN, recursively building up a tree under this node"""
+
+        # tree node: count of children, count of metadata, children, metadata
+
+        assert(len(lN) >= 2)
+
+        cChild = lN[0]
+        cData = lN[1]
+
+        # drop the first two elements from the list
+
+        lN[0:2] = []
+
+        assert(len(lN) >= cChild * 2 + cData)
+
+        # pull children out of the list
+
+        for iChild in range(cChild):
+            self.m_lT8Child.append(Tree8())
+            self.m_lT8Child[-1].Consume(lN)
+
+        assert(len(lN) >= cData)
+        self.m_lNData = lN[:cData]
+
+        # drop the metadata from the list
+
+        lN[0:cData] = []
+
+    def TotalComplex(self):
+        """Return the "total value" for this node, which is calculated via a complex set of constraints"""
+
+        # if we've previously calculated this total, return its cached value
+
+        if self.m_tcCache is not None:
+            return self.m_tcCache
+
+        # if a node has no children, its value is the sum of its metadata
+
+        if not self.m_lT8Child:
+            self.m_tcCache = sum(self.m_lNData)
+            return self.m_tcCache
+
+        # if a node has children, its metadata entries are child indices (1-indexed) which are to be added
+        #  together. 0 = no child (skip), and entries outside of range otherwise are also skipped. Repeats
+        #  are honored (1 1 = child0 * 2, for example).
+
+        self.m_tcCache = 0
+        for iChild1 in self.m_lNData:
+            iChild0 = iChild1 - 1
+            if iChild0 < 0:
+                continue
+
+            if iChild0 >= len(self.m_lT8Child):
+                continue
+
+            self.m_tcCache += self.m_lT8Child[iChild0].TotalComplex()
+
+        return self.m_tcCache
+
+def Day8a():
+    """Given an encoded tree, assemble the tree, and then produce the sum of all of the metadata entries."""
+
+    strIn = ain.s_strIn8
+    t8 = Tree8()
+    t8.Populate(strIn)
+
+    total = 0
+    lT8 = [t8]
+
+    while lT8:
+        t8 = lT8[0]
+        lT8[0:1] = []
+        total += sum(t8.m_lNData)
+        lT8.extend(t8.m_lT8Child)
+
+    print "Total is {tot}".format(tot=total)
+
+def Day8b():
+    """Calculate a more complex value; computation is in the Tree8 class."""
+
+    strIn = ain.s_strIn8
+    t8 = Tree8()
+    t8.Populate(strIn)
+
+    print "Total (complex) is {tot}".format(tot=t8.TotalComplex())
+
 if __name__ == '__main__':
-    Day7b()
+    Day8b()
