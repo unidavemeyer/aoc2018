@@ -776,6 +776,9 @@ def Day9a():
 
             mpIPlayerScore[iPlayer] = mpIPlayerScore.get(iPlayer, 0) + score
 
+            if nMarble < 1000:
+                print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
+
             #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
             #print lNCircle
 
@@ -787,8 +790,8 @@ def Day9a():
             lNCircle[iNCur:iNCur] = [nMarble]
             #print lNCircle
 
-        if nMarble % 10000 == 0:
-            print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
+        #if nMarble % 10000 == 0:
+            #print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
 
         # advance marble and player
 
@@ -840,62 +843,79 @@ def Day9b():
     # maybe there *is* an N%M sum thing that I could come up with that makes the pattern of the totals and/or the extras?
     # or maybe the remove-7 number is something based on the 23 multiple that's removed?
 
+    # ok, totally different thought: perhaps the issue here is that I'm just doing things naively with a list, which means that
+    #  every insert is pushing around a whole bunch of elements. perhaps all that I need to make things run in a tenable amount
+    #  of time is to *actually* use a doubly-linked list, so that elements are just hanging out. we'll make millions of them, but
+    #  that's fine, and the key is that we'll only visit things as we need to, not shuffle everything around whenever anything
+    #  changes. I'm going to give that a whirl and see if that works better. Hopefully it will. :)
+
     nMarbleMax = 7162800 + 1
     cPlayer = 448
 
-    mpIPlayerScore = {}
-    mpIPlayerLN = {}
+    class Marble:
+        def __init__(self, n):
+            self.m_n = n
+            self.m_prev = None
+            self.m_next = None
 
-    lNCircle = [0]
+    mpIPlayerScore = {}
+
+    # initialize "circle" that's all just itself
+
+    marbleCur = Marble(0)
+    marbleCur.m_prev = marbleCur
+    marbleCur.m_next = marbleCur
+    marble0 = marbleCur
+
     iNCur = 0
     iPlayer = 0
     nMarble = 1
 
     lNRemoved = []
-    lNRemoved2 = []
 
     while nMarble < nMarbleMax:
         if nMarble % 23 == 0:
             # scoring round
             score = nMarble
-            lNRemoved2.append(score)
 
-            mpIPlayerLN.setdefault(iPlayer, []).append(nMarble)
+            # find the 7th previous marble
 
-            iNCur = (iNCur + len(lNCircle) - 7) % len(lNCircle)
-            score += lNCircle[iNCur]
-            mpIPlayerLN[iPlayer].append(lNCircle[iNCur])
-            lNRemoved.append(lNCircle[iNCur])
-            lNRemoved2[-1] += lNCircle[iNCur]
+            for i in range(7):
+                marbleCur = marbleCur.m_prev
 
-            lNCircle[iNCur:iNCur+1] = []
+            # update the score
 
+            score += marbleCur.m_n
             mpIPlayerScore[iPlayer] = mpIPlayerScore.get(iPlayer, 0) + score
 
-            #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
-            #print "  pieces: {ln}".format(ln=str(mpIPlayerLN[iPlayer]))
-            #print "  pieces: {ln}".format(ln=str(sorted(mpIPlayerLN[iPlayer])))
-            #print "  pieces mod  23: {ln}".format(ln=["{0:5n}".format(x % 23) for x in (mpIPlayerLN[iPlayer])])
-            #print "  pieces mod 448: {ln}".format(ln=["{0:5n}".format(x % 448) for x in (mpIPlayerLN[iPlayer])])
-            #print "  pieces mod   Z: {ln}".format(ln=["{0:5n}".format(x % (448 % 23)) for x in (mpIPlayerLN[iPlayer])])
-            #print "  pieces mod   7: {ln}".format(ln=["{0:5n}".format(x % 7) for x in (mpIPlayerLN[iPlayer])])
+            # remove the marble we're dropping
+
+            marbleDel = marbleCur
+            marbleCur = marbleCur.m_next
+            marbleDel.m_prev.m_next = marbleDel.m_next
+            marbleCur.m_prev = marbleDel.m_prev
+
+            #if nMarble < 1000:
+                #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
 
             #print lNCircle
 
         else:
             # standard insert round
 
-            iNCur = (iNCur + 1) % len(lNCircle)
-            iNCur += 1
-            lNCircle[iNCur:iNCur] = [nMarble]
-            #print lNCircle
+            marbleCur = marbleCur.m_next
+            marbleNew = Marble(nMarble)
 
-        if nMarble == 3000:
-            print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
-            print "Marbles removed (non-mod-23 ones): {ln}".format(ln=lNRemoved)
-            print "Scores gained: {ln}".format(ln=lNRemoved2)
-            print "Differences (n*23 - m7): {ln}".format(ln=[23 * (i+1) - n for i, n in enumerate(lNRemoved)])
-            break
+            # do the pointer shuffling for the insert
+
+            marbleNew.m_prev = marbleCur
+            marbleNew.m_next = marbleCur.m_next
+            marbleCur.m_next = marbleNew
+            marbleNew.m_next.m_prev = marbleNew
+            marbleCur = marbleNew
+
+        if nMarble % 100000 == 0:
+            print "At marble {mC} of {mM} ({pct:.2f}%)".format(mC=nMarble, mM=nMarbleMax, pct=100.0*nMarble/nMarbleMax)
 
         # advance marble and player
 
@@ -904,8 +924,6 @@ def Day9b():
 
     scoreBest = sorted(mpIPlayerScore.values())[-1]
     print "best score: {sc}".format(sc=scoreBest)
-
-    pass
 
 def LPvDay10():
     """Return a list of 4-tuples like (x, y, dx, dy) for the program input"""
@@ -1129,4 +1147,5 @@ def Day11b():
     print "Best corner is at ({x},{y},{size}) with power {p}".format(x=cornerBest[0], y=cornerBest[1], p=powerBest, size=sizeBest)
 
 if __name__ == '__main__':
-    Day11b()
+    Day9a()
+    Day9b()
