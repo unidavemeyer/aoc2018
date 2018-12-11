@@ -907,5 +907,118 @@ def Day9b():
 
     pass
 
+def LPvDay10():
+    """Return a list of 4-tuples like (x, y, dx, dy) for the program input"""
+
+    rePv = re.compile(r'position=<\s*(-?\d+),\s*(-?\d+)>\s*velocity=<\s*(-?\d+),\s*(-?\d+)>')
+
+    lPv = []
+    for str0 in ain.s_strIn10.strip().split('\n'):
+        match = rePv.search(str0)
+        if not match:
+            continue
+
+        lStr = match.groups()
+        lPv.append(tuple([int(x) for x in lStr]))
+        assert(len(lPv[-1]) == 4)
+
+    return lPv
+
+def IncrementLPv(lPv, dT):
+    """Increment (or decrement with dT -1) lPv coordinates based on their (dx,dy) values in place"""
+
+    for i in range(len(lPv)):
+        pv = lPv[i]
+        lPv[i] = (pv[0] + dT * pv[2], pv[1] + dT * pv[3], pv[2], pv[3])
+
+def DrawLPv(lPv):
+    """Display (somehow) the given lPv values"""
+
+    # calculate display limits
+
+    lX = [pv[0] for pv in lPv]
+    lX.sort()
+    x0 = lX[0]
+    x1 = lX[-1] + 1
+
+    lY = [pv[1] for pv in lPv]
+    lY.sort()
+    y0 = lY[0]
+    y1 = lY[-1] + 1
+
+    # calculate set of positions
+
+    setP = set([(pv[0], pv[1]) for pv in lPv])
+
+    # draw stuff by checking the set
+
+    print "----"
+    y = y0
+    while y < y1:
+        x = x0
+        while x < x1:
+            ch = '.'
+            if (x, y) in setP:
+                ch = '#'
+            sys.stdout.write(ch)
+            x += 1
+        sys.stdout.write('\n')
+        y += 1
+
+def Day10a():
+    """Given starting points and velocities (all in 2-d, left->right, top->bottom coordinates), calculate forward step by step to figure
+    out what the message will be when all of the points are properly coincident to form letters."""
+
+    # basic idea 1: just plot pictographically each time, and allow me to scan through them until I see something. Not great, but
+    #  might be doable.
+
+    # basic idea 2: like idea 1, roughly, but keep track of the "smallest" approach that I get on the various values, and center the
+    #  acutal message search on times near that figuring that points will otherwise be mostly more divergent. Seems like this might be
+    #  worth pursuing, since I'm not sure the extents or time deltas necessary to look through the actual input data.
+
+    lPv = LPvDay10()
+
+    lX = [pv[0] for pv in lPv]
+    lY = [pv[1] for pv in lPv]
+    posMax = (max(lX), max(lY))
+    posMin = (min(lX), min(lY))
+
+    cIter = 0
+    while True:
+        # advance the positions forwards in time
+
+        cIter += 1
+        IncrementLPv(lPv, 1)
+
+        lX = [pv[0] for pv in lPv]
+        lY = [pv[1] for pv in lPv]
+        posMaxCur = (max(lX), max(lY))
+        posMinCur = (min(lX), min(lY))
+
+        if posMaxCur[0] >= posMax[0] and posMaxCur[1] >= posMax[1]:
+            # maximum increasing, so probably diverging again
+            break
+
+        if posMinCur[0] <= posMin[0] and posMinCur[1] <= posMin[1]:
+            # minimum decreasing, so probably diverging again
+            break
+
+        # update best max/min values
+
+        posMax = (min(posMax[0], posMaxCur[0]), min(posMax[1], posMaxCur[1]))
+        posMin = (max(posMin[0], posMinCur[0]), max(posMin[1], posMinCur[1]))
+
+    # show some stuff, in hopes that it all makes sense somewhere
+
+    print "Saw divergence start at iteration {i}, replaying some previous in hopes they work:".format(i=cIter)
+
+    for i in range(5):
+        DrawLPv(lPv)
+        IncrementLPv(lPv, -1)
+
+def Day10b():
+    pass
+
 if __name__ == '__main__':
-    Day9b()
+    Day10a()
+    Day10b()
