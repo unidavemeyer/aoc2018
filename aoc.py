@@ -750,5 +750,162 @@ def Day8b():
 
     print "Total (complex) is {tot}".format(tot=t8.TotalComplex())
 
+def Day9a():
+    """Calculate something for N players on a wacky "marble game" listed in the rules"""
+
+    strIn = "448 players; last marble is worth 71628 points"
+
+    nMarbleMax = 71628 + 1
+    cPlayer = 448
+
+    mpIPlayerScore = {}
+
+    lNCircle = [0]
+    iNCur = 0
+    iPlayer = 0
+    nMarble = 1
+
+    while nMarble < nMarbleMax:
+        if nMarble % 23 == 0:
+            # scoring round
+            score = nMarble
+
+            iNCur = (iNCur + len(lNCircle) - 7) % len(lNCircle)
+            score += lNCircle[iNCur]
+            lNCircle[iNCur:iNCur+1] = []
+
+            mpIPlayerScore[iPlayer] = mpIPlayerScore.get(iPlayer, 0) + score
+
+            #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
+            #print lNCircle
+
+        else:
+            # standard insert round
+
+            iNCur = (iNCur + 1) % len(lNCircle)
+            iNCur += 1
+            lNCircle[iNCur:iNCur] = [nMarble]
+            #print lNCircle
+
+        if nMarble % 10000 == 0:
+            print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
+
+        # advance marble and player
+
+        nMarble += 1
+        iPlayer = (iPlayer + 1) % cPlayer
+
+    scoreBest = sorted(mpIPlayerScore.values())[-1]
+    print "best score: {sc}".format(sc=scoreBest)
+
+def Day9b():
+    """Calculate something for N players on a wacky "marble game" listed in the rules"""
+
+    strIn = "448 players; last marble is worth 7162800 points"
+
+    # NOTE (davidm) this is...rather intractable to calculate via the same means as we did originally.
+    # I'm guessing there's some formula that I can come up with to solve this, maybe? I'm going to try
+    # spitting out the score numbers for a part of this to see what I can come up with instead.
+
+    # well, I'm stumped for now. I'm not seeing a useful pattern anywhere, even with some interesting mods.
+    # I can clearly figure out what half of the numbers that any given player picks up (they'll be the multiples
+    # of 23 at iPlayer and then iPlayer + cPlayer, etc.). But the other half, I really don't see. I'm not detecting
+    # what the appropriate sub-pattern is there. The "move back 7" thing, combined with the "move forward two" thing
+    # ends up with my noodle being pretty thoroughly baked.
+
+    # Couple further thoughts: the pattern of marbles that comes out is constant with respect to number of
+    # players, so I shouldn't factor anything of particular note in there. If I can instead generate the
+    # pattern of marbles coming out, I can then splatter that into the players to calculate the scores.
+
+    # There is a surprising number of "plus 8" values in what I see. Unfortunately, that pattern is also irregular
+    # so I'm currently unable to make much of it. Maybe that has something to do with the fact that we're going back
+    # 7 values? Not super clear to me that's the case. The edit when the marble is removed, plus the 23 multiple that
+    # never goes in, are both super crazy baking to my brain. I guess on the plus side, that means that every 23 marbles
+    # we're actually minus two, not just one, so maybe there's a "mod 21" in there somewhere that makes all of this
+    # stuff make sense? Hmm. I really feel like I'm just grasping at straws on this one.
+
+    # I suppose I could also see if there's a better pattern in the "gained values" that we get out (the 23 + removed).
+    # I tried looking at that, and once again, there are hopeful bits, but nothing that's directly jumping out at me as
+    # the actual solution.
+
+    # So, I'm going to investigate a different approach. I believe that I can (plus or minus) calculate what positional index
+    # in the resulting list I should have for any given value, based on the highest value in the chain...maybe. The trick here
+    # is that I'm not convinced (yet) that I can actually calculate that for sure, because I'm not certain which indices will
+    # actually be removed as I'm calculating things. But what I *do* notice is that 0 is always at index 0 (unless maybe it gets
+    # removed at some point), and (pre-23 removal) I have powers of two as the 1 index, with (obviously) all of the odd indices
+    # progressing upwards one-at-a-time from that "anchor" value. The even indices, if we divide them by two, follow the same
+    # pattern. The %23 removal step (with its additional removed value) throw all of that into a bit of disarray, unfortunately,
+    # which is where things get tricky for me to understand.
+
+    # maybe there *is* an N%M sum thing that I could come up with that makes the pattern of the totals and/or the extras?
+    # or maybe the remove-7 number is something based on the 23 multiple that's removed?
+
+    nMarbleMax = 7162800 + 1
+    cPlayer = 448
+
+    mpIPlayerScore = {}
+    mpIPlayerLN = {}
+
+    lNCircle = [0]
+    iNCur = 0
+    iPlayer = 0
+    nMarble = 1
+
+    lNRemoved = []
+    lNRemoved2 = []
+
+    while nMarble < nMarbleMax:
+        if nMarble % 23 == 0:
+            # scoring round
+            score = nMarble
+            lNRemoved2.append(score)
+
+            mpIPlayerLN.setdefault(iPlayer, []).append(nMarble)
+
+            iNCur = (iNCur + len(lNCircle) - 7) % len(lNCircle)
+            score += lNCircle[iNCur]
+            mpIPlayerLN[iPlayer].append(lNCircle[iNCur])
+            lNRemoved.append(lNCircle[iNCur])
+            lNRemoved2[-1] += lNCircle[iNCur]
+
+            lNCircle[iNCur:iNCur+1] = []
+
+            mpIPlayerScore[iPlayer] = mpIPlayerScore.get(iPlayer, 0) + score
+
+            #print "player {p} scored {t}, new total: {tot}".format(p=iPlayer, t=score, tot=mpIPlayerScore[iPlayer])
+            #print "  pieces: {ln}".format(ln=str(mpIPlayerLN[iPlayer]))
+            #print "  pieces: {ln}".format(ln=str(sorted(mpIPlayerLN[iPlayer])))
+            #print "  pieces mod  23: {ln}".format(ln=["{0:5n}".format(x % 23) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod 448: {ln}".format(ln=["{0:5n}".format(x % 448) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod   Z: {ln}".format(ln=["{0:5n}".format(x % (448 % 23)) for x in (mpIPlayerLN[iPlayer])])
+            #print "  pieces mod   7: {ln}".format(ln=["{0:5n}".format(x % 7) for x in (mpIPlayerLN[iPlayer])])
+
+            #print lNCircle
+
+        else:
+            # standard insert round
+
+            iNCur = (iNCur + 1) % len(lNCircle)
+            iNCur += 1
+            lNCircle[iNCur:iNCur] = [nMarble]
+            #print lNCircle
+
+        if nMarble == 3000:
+            print "At marble {n}/{m} ({pct}%)".format(n=nMarble, m=nMarbleMax, pct=100.0 * nMarble / nMarbleMax)
+            print "Marbles removed (non-mod-23 ones): {ln}".format(ln=lNRemoved)
+            print "Scores gained: {ln}".format(ln=lNRemoved2)
+            print "Differences (n*23 - m7): {ln}".format(ln=[23 * (i+1) - n for i, n in enumerate(lNRemoved)])
+            break
+
+        # advance marble and player
+
+        nMarble += 1
+        iPlayer = (iPlayer + 1) % cPlayer
+
+    scoreBest = sorted(mpIPlayerScore.values())[-1]
+    print "best score: {sc}".format(sc=scoreBest)
+
+    pass
+
 if __name__ == '__main__':
-    Day8b()
+    Day9b()
