@@ -1016,9 +1016,117 @@ def Day10a():
         DrawLPv(lPv)
         IncrementLPv(lPv, -1)
 
-def Day10b():
-    pass
+def Day11a():
+    """Return the upper left coordinate of the 1-indexed 3x3 subgrid of a grid of 300x300 cells which has the highest sum"""
+
+    # my personal input
+
+    serial = 3031
+
+    # construct the power grid
+
+    mpX1Y1 = {}
+    for x0 in range(300):
+        x1 = x0 + 1
+        mpX1Y1[x1] = {}
+        for y0 in range(300):
+            y1 = y0 + 1
+
+            rackId = x1 + 10
+            power = rackId * y1
+            power += serial
+            power *= rackId
+            digit = (power / 100) % 10 if power > 100 else 0
+            power = digit - 5
+
+            mpX1Y1[x1][y1] = power
+
+    # scan 3x3 subgrids to find the one with the highest total
+
+    powerBest = -100000 # hopefully small enough
+    cornerBest = (-1,-1)
+
+    for x0 in range(300 - 3):
+        x1 = x0 + 1
+        for y0 in range(300 - 3):
+            y1 = y0 + 1
+
+            corner = (x1, y1)
+            power = 0
+            for dX in range(3):
+                for dY in range(3):
+                    power += mpX1Y1[x1 + dX][y1 + dY]
+
+            if power > powerBest:
+                cornerBest = corner
+                powerBest = power
+
+    print "Best corner is at ({x},{y}) with power {p}".format(x=cornerBest[0], y=cornerBest[1], p=powerBest)
+
+def Day11b():
+    """Using the mapping from part a, calculate the best square subgrid of any size (x,y,size)"""
+
+    # my personal input
+
+    serial = 3031
+
+    # construct the power grid
+
+    mpX1Y1 = {}
+    for x0 in range(300):
+        x1 = x0 + 1
+        mpX1Y1[x1] = {}
+        for y0 in range(300):
+            y1 = y0 + 1
+
+            rackId = x1 + 10
+            power = rackId * y1
+            power += serial
+            power *= rackId
+            digit = (power / 100) % 10 if power > 100 else 0
+            power = digit - 5
+
+            mpX1Y1[x1][y1] = power
+
+    # scan all square subgrids to find the one with the highest total
+
+    powerBest = -100000 # hopefully small enough
+    sizeBest = -1
+    cornerBest = (-1,-1)
+
+    for x0 in range(300):
+        x1 = x0 + 1
+        print "Scanning x1 at {x1}".format(x1=x1)
+
+        for y0 in range(300):
+            y1 = y0 + 1
+
+            corner = (x1, y1)
+
+            # calculate consecutively larger sizes starting at this corner, tracking
+            #  the power total for each square subgrid as we get it
+
+            # NOTE (davidm) by doing this, we avoid an extra multiplier on the time to
+            #  calculate an answer by avoiding recalculating all of the "smaller" squares
+            #  anytime we want to calculate a "larger" square with the same origin corner
+
+            power = 0
+            size = 1
+            while max(x1, y1) + size < 301:
+                for dX in range(size):
+                    power += mpX1Y1[x1 + dX][y1 + size - 1]
+                for dY in range(size - 1):
+                    power += mpX1Y1[x1 + size - 1][y1 + dY]
+
+                if power > powerBest:
+                    cornerBest = corner
+                    powerBest = power
+                    sizeBest = size
+                    print "  Best so far: ({x},{y},{s}) with {p}".format(x=x1, y=y1, s=size, p=power)
+
+                size += 1
+
+    print "Best corner is at ({x},{y},{size}) with power {p}".format(x=cornerBest[0], y=cornerBest[1], p=powerBest, size=sizeBest)
 
 if __name__ == '__main__':
-    Day10a()
-    Day10b()
+    Day11b()
