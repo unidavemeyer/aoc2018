@@ -1146,6 +1146,174 @@ def Day11b():
 
     print "Best corner is at ({x},{y},{size}) with power {p}".format(x=cornerBest[0], y=cornerBest[1], p=powerBest, size=sizeBest)
 
+def SetIPlant12():
+    """Return a set of indices that have plants for the inital state of day 12"""
+
+    strInit = ain.s_strIn12.strip().split('\n')[0]
+    lPart = strInit.split()
+    assert len(lPart) == 3
+
+    pattern =  lPart[-1]
+
+    setIPlant = set()
+    for i, ch in enumerate(pattern):
+        if ch == '#':
+            setIPlant.add(i)
+        else:
+            assert ch == '.'
+
+    return setIPlant
+
+class Rule12:
+    def __init__(self, strIn):
+        self.m_setDIPlant = set()
+        self.m_plant = None
+
+        # parse strIn into a set of delta indices that have plants and the result
+
+        lPart = strIn.split()
+        assert len(lPart) == 3
+        assert len(lPart[0]) == 5
+        assert len(lPart[-1]) == 1
+
+        for i, ch in enumerate(lPart[0]):
+            if ch == '#':
+                self.m_setDIPlant.add(i - 2)
+
+        self.m_plant = True if lPart[-1] == '#' else False
+
+    def Match(self, setIPlant, i):
+        for di in [-2, -1, 0, 1, 2]:
+            fSetPlant = (i + di) in setIPlant
+            fSetRule = di in self.m_setDIPlant
+
+            if fSetPlant != fSetRule:
+                return False
+
+        return True
+
+def LRule12():
+    """Return set of rules for day 12 puzzle"""
+
+    lStr = ain.s_strIn12.strip().split('\n')
+    assert lStr[0].startswith('initial')
+    assert lStr[1] == ''
+
+    lRule = []
+    for str0 in lStr[2:]:
+        lRule.append(Rule12(str0))
+
+    return lRule
+
+def Day12a():
+    # input is #.#..# where # = occupied, . = empty, and the first is element 0, moving positively as we go. Note that there are also
+    #  negative pots, which are all starting off empty.
+
+    # also have "rules" of the form LLCRR => [.#] meaning that if the pattern looks like LLCRR, C will then have . or # as listed
+
+    # want to figure what happens after 20 generations
+
+    # want to sum up all pot numbers containing plants at gen 20, with initial state being gen 0
+
+    setIPlant0 = SetIPlant12()
+    lRule = LRule12()
+
+    setIPlantPrev = setIPlant0
+
+    iGen = 0
+    while iGen < 20:
+        iGen += 1
+
+        # for each position of interest (current max/min plant plus slop) check for applicable rule and
+        #  update next generation set as appropriate
+
+        iMic = min(setIPlantPrev) - 6
+        iMac = max(setIPlantPrev) + 6
+
+        setIPlantNext = set()
+        for di in range(iMac - iMic):
+            i = iMic + di
+
+            for rule in lRule:
+                if rule.Match(setIPlantPrev, i):
+                    if rule.m_plant:
+                        setIPlantNext.add(i)
+                    break
+
+        print sorted(setIPlantNext)
+        setIPlantPrev = setIPlantNext
+
+    print "Total: {s}".format(s=sum(setIPlantNext))
+
+def Day12b():
+    # input is #.#..# where # = occupied, . = empty, and the first is element 0, moving positively as we go. Note that there are also
+    #  negative pots, which are all starting off empty.
+
+    # also have "rules" of the form LLCRR => [.#] meaning that if the pattern looks like LLCRR, C will then have . or # as listed
+
+    # want to figure what happens after 20 generations
+
+    # want to sum up all pot numbers containing plants at gen 20, with initial state being gen 0
+
+    setIPlant0 = SetIPlant12()
+    lRule = LRule12()
+
+    setIPlantPrev = setIPlant0
+
+    iGen = 0
+    cGen = 50000000000
+    fIdentical = False
+    while iGen < cGen:
+        iGen += 1
+
+        # for each position of interest (current max/min plant plus slop) check for applicable rule and
+        #  update next generation set as appropriate
+
+        iMic = min(setIPlantPrev) - 6
+        iMac = max(setIPlantPrev) + 6
+
+        setIPlantNext = set()
+        for di in range(iMac - iMic):
+            i = iMic + di
+
+            for rule in lRule:
+                if rule.Match(setIPlantPrev, i):
+                    if rule.m_plant:
+                        setIPlantNext.add(i)
+                    break
+
+        # check for steady-state, where we're just generating an offset version of the same pattern over and over
+
+        setIPlantNext0 = set()
+        for i in setIPlantPrev:
+            setIPlantNext0.add(i+1)
+
+        if setIPlantNext0 == setIPlantNext:
+            if not fIdentical:
+                fIdentical = True
+            else:
+                print "At iGen {i} hit double pattern repeat: {pat}".format(i=iGen, pat=str(sorted(setIPlantNext)))
+                break
+        else:
+            fIdentical = False
+
+        setIPlantPrev = setIPlantNext
+
+    # convert identical pattern at a generation to the cGen version
+
+    setDi = set()
+    for i in setIPlantNext:
+        setDi.add(i - iGen)
+
+    setIPlantEnd = set()
+    for di in setDi:
+        setIPlantEnd.add(di + cGen)
+
+    print "Result: {pat}".format(pat=str(sorted(setIPlantEnd)))
+    print "Total: {s}".format(s=sum(setIPlantEnd))
+
+    pass
+
 if __name__ == '__main__':
-    Day9a()
-    Day9b()
+    Day12a()
+    Day12b()
