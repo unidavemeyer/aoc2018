@@ -1314,6 +1314,215 @@ def Day12b():
 
     pass
 
+class Cart13:
+    """Represents a cart on a track"""
+
+    s_lTurn = ['left', 'straight', 'right']
+
+    def __init__(self, x, y, dx, dy):
+        self.m_x = x
+        self.m_y = y
+        self.m_dx = dx
+        self.m_dy = dy
+        self.m_iTurn = 0
+        self.m_tick = None
+
+    def PosNext(self):
+        return (self.m_x + self.m_dx, self.m_y + self.m_dy)
+
+    def UpdatePos(self, posNext, trackNext, tick):
+        if trackNext == '-':
+            assert self.m_dy == 0
+            assert self.m_dx != 0
+        elif trackNext == '|':
+            assert self.m_dy != 0
+            assert self.m_dx == 0
+        elif trackNext == '/':
+            self.m_dx, self.m_dy = -self.m_dy, -self.m_dx
+        elif trackNext == '\\':
+            self.m_dx, self.m_dy = self.m_dy, self.m_dx
+        elif trackNext == '+':
+            turn = Cart13.s_lTurn[self.m_iTurn]
+
+            if turn == 'left':
+                self.m_dx, self.m_dy = self.m_dy, -self.m_dx
+            elif turn == 'straight':
+                pass    # no change in direction
+            elif turn == 'right':
+                self.m_dx, self.m_dy = -self.m_dy, self.m_dx
+
+            self.m_iTurn = (self.m_iTurn + 1) % len(Cart13.s_lTurn)
+        else:
+            assert False, "Bad track in cart advance"
+
+        self.m_x, self.m_y = posNext
+        self.m_tick = tick
+        assert (self.m_dx == 0) != (self.m_dy == 0)
+
+class Course13:
+    """Represents a course (track + carts)"""
+
+    def __init__(self, strIn):
+        self.m_dX = 0
+        self.m_dY = 0
+        self.m_mpXYTrack = {}
+        self.m_lCart = []
+        self.m_xCol = None
+        self.m_yCol = None
+        self.m_fClear = False
+
+        self.Parse(strIn)
+
+    def SetClearCollisions(self, fClear):
+        self.m_fClear = fClear
+
+    def Parse(self, strIn):
+        lStr = strIn.split('\n')
+        if lStr[0] == '':
+            lStr = lStr[1:]
+        self.m_dY = len(lStr)
+        self.m_dX = max([len(str0) for str0 in lStr])
+
+        for y, str0 in enumerate(lStr):
+            for x, ch in enumerate(str0):
+                if ch in set(['-', '|', '\\', '/', '+']):
+                    self.m_mpXYTrack[(x,y)] = ch
+                elif ch == '<':
+                    self.m_mpXYTrack[(x,y)] = '-'
+                    self.m_lCart.append(Cart13(x, y, -1, 0))
+                elif ch == '>':
+                    self.m_mpXYTrack[(x,y)] = '-'
+                    self.m_lCart.append(Cart13(x, y, 1, 0))
+                elif ch == '^':
+                    self.m_mpXYTrack[(x,y)] = '|'
+                    self.m_lCart.append(Cart13(x, y, 0, -1))
+                elif ch == 'v' or ch == 'V':
+                    self.m_mpXYTrack[(x,y)] = '|'
+                    self.m_lCart.append(Cart13(x, y, 0, 1))
+
+    def Advance(self, tick):
+        """Run the carts all forward one step, checking for collisions"""
+
+        mpPosCart = {}
+        for cart in self.m_lCart:
+            mpPosCart[(cart.m_x, cart.m_y)] = cart
+
+        for y in range(self.m_dY):
+            for x in range(self.m_dX):
+                posPrev = (x,y)
+
+                cart = mpPosCart.get(posPrev, None)
+                if not cart:
+                    continue
+
+                if cart.m_tick == tick:
+                    # already handled this cart this tick
+                    continue
+
+                posNext = cart.PosNext()
+
+                cartOther = mpPosCart.get(posNext, None)
+
+                if cartOther:
+                    # found a collision
+                    if not self.m_fClear:
+                        self.m_xCol = posNext[0]
+                        self.m_yCol = posNext[1]
+                        return
+                    else:
+                        # remove the collided carts
+
+                        del mpPosCart[posNext]
+                        del mpPosCart[posPrev]
+                        continue
+
+                # didn't hit anything
+
+                cart.UpdatePos(posNext, self.m_mpXYTrack[posNext], tick)
+
+                # update the cart position map
+
+                del mpPosCart[posPrev]
+                mpPosCart[posNext] = cart
+
+        if self.m_fClear:
+            # update the list of carts to be just those we're still tracking
+
+            self.m_lCart = mpPosCart.values()
+
+    def FHasCollision(self):
+        return self.m_xCol is not None
+
+    def XCol(self):
+        return self.m_xCol
+
+    def YCol(self):
+        return self.m_yCol
+
+    def Print(self):
+        mpXYCart = {}
+        for cart in self.m_lCart:
+            mpXYCart[(cart.m_x, cart.m_y)] = cart
+
+        for y in range(self.m_dY):
+            for x in range(self.m_dX):
+                cart = mpXYCart.get((x,y), None)
+                if cart:
+                    ch = '<'
+                    if cart.m_dx == 1:
+                        ch = '>'
+                    elif cart.m_dy == -1:
+                        ch = '^'
+                    elif cart.m_dy == 1:
+                        ch = 'v'
+                    sys.stdout.write(ch)
+                else:
+                    sys.stdout.write(self.m_mpXYTrack.get((x,y), ' '))
+            sys.stdout.write('\n')
+
+def Day13a():
+    """Run a little "minecart" simulation to determine where the first intersection occurs"""
+
+    # valid track areas: | - / \ +
+    # valid carts: > < ^ v
+    # carts turn L, S, R (repeat) at intersections, per cart
+    # carts solve top to bottom, left to right within a row
+
+    course = Course13(ain.s_strIn13)
+
+    tick = 0
+    while True:
+        tick += 1
+        #print "Running tick {tick}".format(tick=tick)
+        course.Advance(tick)
+        #course.Print()
+        if course.FHasCollision():
+            break
+
+    print "Collision at tick {tick} and pos ({x},{y})".format(tick=tick, x=course.XCol(), y=course.YCol())
+
+def Day13b():
+    """Run the "minecart" simulation, removing all colliding carts as they hit, and then determine the location of the final remaining cart"""
+
+    course = Course13(ain.s_strIn13)
+    course.SetClearCollisions(True)
+
+    tick = 0
+    while True:
+        tick += 1
+        cCart0 = len(course.m_lCart)
+        #print "Running tick {tick}".format(tick=tick)
+        course.Advance(tick)
+        cCart1 = len(course.m_lCart)
+
+        if cCart1 < 2:
+            break
+        elif cCart0 != cCart1:
+            print "Removed {c} carts at tick {t}; {r} remain".format(c=cCart0 - cCart1, t=tick, r=cCart1)
+
+    cart = course.m_lCart[0]
+    print "Last cart at tick {tick} and pos ({x},{y})".format(tick=tick, x=cart.m_x, y=cart.m_y)
+
 if __name__ == '__main__':
-    Day12a()
-    Day12b()
+    Day13a()
+    Day13b()
