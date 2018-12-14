@@ -1523,6 +1523,139 @@ def Day13b():
     cart = course.m_lCart[0]
     print "Last cart at tick {tick} and pos ({x},{y})".format(tick=tick, x=cart.m_x, y=cart.m_y)
 
+def Day14a():
+    """Calculate what the 10 recipes following my target number are (each recipe is a single digit). Recipes combine by adding together and appending
+    the individual digits of the result to the recipe list."""
+
+    # pre-allocate a big array to hold everything so that we can minimize copies (thanks python)
+
+    iGoal = 598701  # from my puzzle input
+
+    lN = [-1] * (iGoal + 12)
+
+    # initialize to proper starting state
+
+    iWrite = 2
+    iCook0 = 0
+    iCook1 = 1
+    lN[0] = 3
+    lN[1] = 7
+
+    while iWrite < iGoal + 10:
+        # Fill in next recipe score
+
+        iWritePrev = iWrite
+
+        scoreNext = lN[iCook0] + lN[iCook1]
+        if scoreNext > 9:
+            # two digits
+            lN[iWrite] = 1
+            iWrite += 1
+            lN[iWrite] = scoreNext - 10
+            iWrite += 1
+        else:
+            # one digit
+            lN[iWrite] = scoreNext
+            iWrite += 1
+
+        # advance the cooks
+
+        step0 = lN[iCook0] + 1
+        step1 = lN[iCook1] + 1
+
+        iCook0 = (iCook0 + step0) % iWrite
+        iCook1 = (iCook1 + step1) % iWrite
+
+        # show some basic stuff
+
+        if iWrite < 20:
+            print lN[:iWrite + 1]
+
+        # show some progress (to verify that we're proceeding ok)
+
+        if iWritePrev / 1000 != iWrite / 1000:
+            print "Writing at {i} ({pct:.2f}%)".format(i=iWrite, pct=100.0 * iWrite / (iGoal + 10))
+
+    print 'Last recipes:'
+    print ''.join([str(n) for n in lN[iGoal:iGoal + 10]])
+
+def Day14b():
+    """Calculate new recipes until we find the goal sequence in the recipe sequence, and then report how many recipes preceed that"""
+
+    # pre-allocate a big array to hold everything so that we can minimize copies (thanks python)
+
+    iGoal = 598701  # from my puzzle input
+    lNGoal = [int(n) for n in list(str(iGoal))]
+
+    # NOTE (davidm) I started at 5x, and then just doubled each time I couldn't find what I was looking for, until I got to 40.
+    #  Luckily this doesn't take that long to run. A better version, perhaps, would be to either just trust python to do the right
+    #  thing with a growing list, or to include new list allocations directly (alloc new, then copy), so that the size wouldn't
+    #  have to be specified.
+
+    lN = [-1] * (40 * iGoal)     # total guess, hopefully we'll find it...
+
+    # initialize to proper starting state
+
+    iWrite = 2
+    iCook0 = 0
+    iCook1 = 1
+    lN[0] = 3
+    lN[1] = 7
+    iGoal = None
+
+    while iWrite < len(lN) - 2:
+        # Fill in next recipe score
+
+        iWritePrev = iWrite
+
+        scoreNext = lN[iCook0] + lN[iCook1]
+        if scoreNext > 9:
+            # two digits
+            lN[iWrite] = 1
+            iWrite += 1
+            lN[iWrite] = scoreNext - 10
+            iWrite += 1
+        else:
+            # one digit
+            lN[iWrite] = scoreNext
+            iWrite += 1
+
+        # advance the cooks
+
+        step0 = lN[iCook0] + 1
+        step1 = lN[iCook1] + 1
+
+        iCook0 = (iCook0 + step0) % iWrite
+        iCook1 = (iCook1 + step1) % iWrite
+
+        # check the last recipes in sequence to see if they're the goal
+
+        if len(lN) > len(lNGoal):
+            # check the second-to-last set (could have added two digits)
+
+            if lN[iWrite - len(lNGoal) - 1:iWrite - 1] == lNGoal:
+                # found the first occurrence of the sequence
+                iGoal = iWrite - len(lNGoal) - 1
+                break
+
+            # check the last set (we could have added two digits)
+
+            if lN[iWrite - len(lNGoal):iWrite] == lNGoal:
+                # found the first occurrence of the sequence
+                iGoal = iWrite - len(lNGoal)
+                break
+
+        # show some progress (to verify that we're proceeding ok)
+
+        if iWritePrev / 1000 != iWrite / 1000:
+            print "Writing at {i} ({pct:.2f}%)".format(i=iWrite, pct=100.0 * iWrite / len(lN))
+            print "Compared {l0} to {l1} for example".format(l0=lN[iWrite - len(lNGoal):iWrite], l1=lNGoal)
+
+    if iGoal is not None:
+        print 'Goal found starting at {i}'.format(i=iGoal)
+    else:
+        print 'Did not find goal :('
+
 if __name__ == '__main__':
-    Day13a()
-    Day13b()
+    #Day14a()
+    Day14b()
