@@ -1656,6 +1656,328 @@ def Day14b():
     else:
         print 'Did not find goal :('
 
+class Entity15: # tag = entity
+    """Entity in an arena; can be wall, floor, goblin, or elf"""
+
+    setEtype = set(['#', '.', 'G', 'E'])
+
+    # NOTE (davidm) ldPos is in "reading" order -- up, then left, then right, then down
+
+    ldPos = [(0, -1), (-1, 0), (1, 0), (0, 1)]
+
+    def __init__(self, pos, etype, arena):
+        self.m_etype = etype
+        self.m_pos = pos
+        self.m_hp = 200     # not applicable for walls, floors
+        self.m_dHp = 3      # damage done, not applicable for walls, floors
+        self.m_arena = arena
+
+        assert etype in Entity15.setEtype
+
+    def MpPosPrevCompute(self):
+        """Calculate all places that can be reached by this entity; resulting map has tuples at each pos with (cost, y, x, dy0, dx0)"""
+
+        lPrev = [(0, self.m_pos[1] + dy, self.m_pos[0] + dx, dy, dx) for dx, dy in Entity15.ldPos]
+
+        mpPosPrev = {}
+        while lPrev:
+            prev = lPrev[0]
+            lPrev = lPrev[1:]
+
+            entity = self.m_arena.m_mpPosEntity.get((prev[2], prev[1]), None)
+            if not entity or entity.m_etype != '.':
+                # blocked/illegal, so skip
+                continue
+
+            if mpPosPrev.get((prev[2], prev[1]), None) != None:
+                # already found this position, so don't keep it again with a worse score
+                continue
+
+            # mark how we got to this position (steps, direction taken)
+
+            mpPosPrev[(prev[2], prev[1])] = prev
+
+            # add new explore locations to check from here
+
+            lPrev.extend([(prev[0] + 1, prev[1] + dy, prev[2] + dx, prev[3], prev[4]) for dx, dy in Entity15.ldPos])
+
+        return mpPosPrev
+
+    def Move(self, lEntityT):
+        """Calculate the desired move for this entity"""
+
+        # Determine possible desired ending locations (open spaces by targets)
+
+        lPosDest = []
+        for entity in lEntityT:
+            lPosTry = [(entity.m_pos[0] + dx, entity.m_pos[1] + dy) for dx, dy in Entity15.ldPos]
+            for pos in lPosTry:
+                entity = self.m_arena.m_mpPosEntity.get(pos, None)
+                if entity and entity.m_etype == '.':
+                    lPosDest.append(pos)
+
+        if not lPosDest:
+            # cannot move, so give up
+            return
+
+        # Calculate BFS flood-filled reachability map for this entity
+
+        mpPosPrev = self.MpPosPrevCompute()
+
+        # Find best target (shortest distance, tiebreak with reading order of destination, with initial direction
+        #  always chosen reading order when multiple exist)
+
+        prevBest = None
+        for pos in lPosDest:
+            prev = mpPosPrev.get(pos, None)
+            if prev == None:
+                continue
+
+            if not prevBest:
+                prevBest = prev
+            else:
+                prevBest = min(prevBest, prev)
+
+        if not prevBest:
+            # nothing could be reached, so give up
+            return
+
+        # move to the desired space
+
+        dy, dx = prevBest[3:]
+        self.m_arena.m_mpPosEntity[self.m_pos] = Entity15(self.m_pos, '.', self.m_arena)
+        self.m_pos = (self.m_pos[0] + dx, self.m_pos[1] + dy)
+        entityDest = self.m_arena.m_mpPosEntity.get(self.m_pos, None)
+        assert entityDest
+        assert entityDest.m_etype == '.'
+        self.m_arena.m_mpPosEntity[self.m_pos] = self
+
+    def Advance(self):
+        """Advance this unit one round"""
+
+        # identify targets and do nothing if there aren't any
+
+        lEntityT = self.m_arena.LElf() if self.m_etype == 'G' else self.m_arena.LGoblin()
+
+        if not lEntityT:
+            print "Ran out of opponents!"
+            self.m_arena.m_fEndCombat = True
+            return
+
+        # Check if a target is already in range
+
+        fMove = True
+        etypeT = 'G' if self.m_etype == 'E' else 'E'
+
+        for dx, dy in Entity15.ldPos:
+            entityT = self.m_arena.m_mpPosEntity.get((self.m_pos[0] + dx, self.m_pos[1] + dy), None)
+            if entityT is not None and entityT.m_etype == etypeT:
+                fMove = False
+                break
+
+        if fMove:
+            # no in-range target, so try to move
+
+            self.Move(lEntityT)
+
+        # Check if we can attack something
+
+        targBest = None
+        for dx, dy in Entity15.ldPos:
+            entityT = self.m_arena.m_mpPosEntity.get((self.m_pos[0] + dx, self.m_pos[1] + dy), None)
+            if entityT is None or entityT.m_etype != etypeT:
+                continue
+
+            targ = (entityT.m_hp, entityT.m_pos[1], entityT.m_pos[0], entityT)
+            if not targBest:
+                targBest = targ
+            else:
+                targBest = min(targBest, targ)
+
+        if not targBest:
+            # no target, so no attack
+            return
+
+        # Attack the target
+
+        entityT = targBest[3]
+        entityT.m_hp -= self.m_dHp
+        if entityT.m_hp < 1:
+            # target died, so replace them with a floor space
+
+            self.m_arena.m_mpPosEntity[entityT.m_pos] = Entity15(entityT.m_pos, '.', self.m_arena)
+
+class Arena15:  # tag = arena
+    """Arena of walls, floors, and units"""
+
+    def __init__(self, strIn):
+        self.m_mpPosEntity = {}
+        self.m_iRound = 0
+        self.m_fEndCombat = False
+
+        # load data from strIn regarding the arena
+
+        for y, str0 in enumerate(strIn.strip().split('\n')):
+            for x, ch in enumerate(str0):
+                assert not self.m_mpPosEntity.has_key((x,y))
+                self.m_mpPosEntity[(x,y)] = Entity15((x,y), ch, self)
+
+    def Advance(self):
+        """Advance the arena simulation one round"""
+
+        self.m_iRound += 1
+
+        # Get all of the units and create a sorted list of their positions
+        #  to operate on (reading order)
+
+        lEntityUnit = self.LGoblin() + self.LElf()
+        lPos = [x.m_pos for x in lEntityUnit]
+        lPos.sort(key=lambda pos: (pos[1], pos[0]))
+
+        # Iterate through positions that need to be updated and run the actions for the unit (if applicable)
+
+        for pos in lPos:
+            entity = self.m_mpPosEntity[pos]
+            if entity.m_etype not in set(['G', 'E']):
+                continue
+
+            entity.Advance()
+
+            if self.m_fEndCombat:
+                return
+
+    def SetElfDamage(self, dHp):
+        for entity in self.LElf():
+            entity.m_dHp = dHp
+
+    def Round(self):
+        return self.m_iRound
+
+    def LGoblin(self):
+        return [x for x in self.m_mpPosEntity.values() if x.m_etype == 'G']
+
+    def LElf(self):
+        return [x for x in self.m_mpPosEntity.values() if x.m_etype == 'E']
+        
+    def Print(self):
+        print "Round", self.m_iRound
+        posMax = max(self.m_mpPosEntity.keys())
+        for y in range(posMax[1] + 1):
+            lHp = []
+            for x in range(posMax[0] + 1):
+                entity = self.m_mpPosEntity[(x,y)]
+                sys.stdout.write(entity.m_etype)
+                if entity.m_etype in set(['G', 'E']):
+                    lHp.append(entity.m_hp)
+
+            if lHp:
+                sys.stdout.write(' {l}'.format(l=str(lHp)))
+
+            sys.stdout.write('\n')
+
+def Day15a():
+    """Run a little move/combat simulation and output a code representing information about the outcome"""
+
+    arena = Arena15(ain.s_strIn15)
+
+    #arena.Print()
+
+    while True:
+        arena.Advance()
+
+        #arena.Print()
+
+        if arena.m_fEndCombat:
+            break
+
+    iRound = arena.Round() - 1  # don't include the round that ended the combat
+
+    winner = 'elf'
+    lEntity = arena.LElf()
+    if not lEntity:
+        winner = 'goblin'
+        lEntity = arena.LGoblin()
+
+    hpRemain = sum([e.m_hp for e in lEntity])
+
+    # Hmm. Came up with 225678, but apparently that answer is too high. Not sure what happened, since I actually
+    #  calculated something. :/
+
+    # I'm going to try a couple of the other example inputs and see if there's something systematically wrong with my code or my
+    #  understanding of the rules.
+
+    # Yep, I get the wrong answer on the first simple one, too, because I'm off by 3hp. Hmm.
+
+    # Likewise, the annotated combat example indicates that I have the movement rules incorrect somehow. Even by round 2, I have a
+    #  different configuration of the board than expected.
+
+    # I fixed an error in how I was sorting moves, which corrected a couple examples, but I still had others that were doing the wrong
+    #  thing. I figured out then that I had a mistake in the order in which I was going through units (I was rotated 90 degrees from
+    #  reading order), and now at least all of the examples I've tried are working.
+
+    # Yes! OK, I have all of the (currently known) bugs worked out. It feels a little slow, but otherwise seems to work OK.
+
+    print "{r} rounds of fighting, with {h} remaining, so {v} wins with a score of {s}".format(r=iRound, h=hpRemain, v=winner, s=iRound * hpRemain)
+
+def Day15b():
+    """OK, do the battle, but calculate how much damage the elves need to do to just barely not suffer any losses"""
+
+    arena0 = Arena15(ain.s_strIn15)
+
+    cElf = len(arena0.LElf())
+
+    dHpMax = 100
+    dHpMin = 4
+    dHp = (dHpMax + dHpMin) / 2
+
+    fFoundMin = False
+    while not fFoundMin:
+        print "Trying at damage = {d}".format(d=dHp)
+
+        arena1 = Arena15(ain.s_strIn15)
+        arena1.SetElfDamage(dHp)
+
+        while True:
+            arena1.Advance()
+
+            if cElf != len(arena1.LElf()):
+                # lost an elf, so bump their damage up
+                dHpMin = dHp + 1
+
+                print "...lost an elf, bumping min up"
+
+                if dHpMin >= dHpMax:
+                    assert dHpMin == dHpMax
+
+                break
+
+            if arena1.m_fEndCombat:
+                if dHp > dHpMin:
+                    # elves won, see if we can reduce their damage
+                    print "...elves won, reducing max"
+                    dHpMax = dHp
+                else:
+                    # calculated!
+                    fFoundMin = True
+
+                break
+
+        # adjust damage and try again
+
+        dHp = (dHpMax + dHpMin) / 2
+
+    iRound = arena1.Round() - 1  # don't include the round that ended the combat
+
+    winner = 'elf'
+    lEntity = arena1.LElf()
+    if not lEntity:
+        winner = 'goblin'
+        lEntity = arena1.LGoblin()
+
+    hpRemain = sum([e.m_hp for e in lEntity])
+
+    print "{r} rounds of fighting, with {h} remaining, so {v} wins with a score of {s}".format(r=iRound, h=hpRemain, v=winner, s=iRound * hpRemain)
+
 if __name__ == '__main__':
-    #Day14a()
-    Day14b()
+    #Day15a()
+    Day15b()
