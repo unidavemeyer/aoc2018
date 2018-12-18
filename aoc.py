@@ -1978,6 +1978,202 @@ def Day15b():
 
     print "{r} rounds of fighting, with {h} remaining, so {v} wins with a score of {s}".format(r=iRound, h=hpRemain, v=winner, s=iRound * hpRemain)
 
+class Op16: # tag = op
+
+    OPK_addr = 'addr'
+    OPK_addi = 'addi'
+
+    OPK_mulr = 'mulr'
+    OPK_muli = 'muli'
+
+    OPK_banr = 'banr'
+    OPK_bani = 'bani'
+
+    OPK_borr = 'borr'
+    OPK_bori = 'bori'
+
+    OPK_setr = 'setr'
+    OPK_seti = 'seti'
+
+    OPK_gtir = 'gtir'
+    OPK_gtri = 'gtri'
+    OPK_gtrr = 'gtrr'
+
+    OPK_eqir = 'eqir'
+    OPK_eqri = 'eqri'
+    OPK_eqrr = 'eqrr'
+
+    s_mpOpkFn = {
+            OPK_addr : lambda self, a, b: self.GetReg(a) + self.GetReg(b),
+            OPK_addi : lambda self, a, b: self.GetReg(a) + b,
+
+            OPK_mulr : lambda self, a, b: self.GetReg(a) * self.GetReg(b),
+            OPK_muli : lambda self, a, b: self.GetReg(a) * b,
+
+            OPK_banr : lambda self, a, b: self.GetReg(a) & self.GetReg(b),
+            OPK_bani : lambda self, a, b: self.GetReg(a) & b,
+
+            OPK_borr : lambda self, a, b: self.GetReg(a) | self.GetReg(b),
+            OPK_bori : lambda self, a, b: self.GetReg(a) | b,
+
+            OPK_setr : lambda self, a, b: self.GetReg(a),
+            OPK_seti : lambda self, a, b: a,
+
+            OPK_gtir : lambda self, a, b: 1 if a > self.GetReg(b) else 0,
+            OPK_gtri : lambda self, a, b: 1 if self.GetReg(a) > b else 0,
+            OPK_gtrr : lambda self, a, b: 1 if self.GetReg(a) > self.GetReg(b) else 0,
+
+            OPK_eqir : lambda self, a, b: 1 if a == self.GetReg(b) else 0,
+            OPK_eqri : lambda self, a, b: 1 if self.GetReg(a) == b else 0,
+            OPK_eqrr : lambda self, a, b: 1 if self.GetReg(a) == self.GetReg(b) else 0,
+        }
+
+    def __init__(self, opk):
+
+        # initialize object; set up fn to match the opk
+
+        self.m_opk = opk
+        self.m_fn = Op16.s_mpOpkFn[opk]
+        self.m_reg = [0] * 4
+
+    def Apply(self, a, b, c):
+        """Apply the op to the given inputs, modifying the internal register to match"""
+
+        res = self.m_fn(self, a, b)
+        self.m_reg[c] = res
+
+    def Matches(self, reg0, reg1, a, b, c):
+        """returns True if this op produces reg1 from reg0 with the given a, b, c values, and False if not; internal register is modified"""
+
+        self.m_reg = []
+        self.m_reg.extend(reg0)
+        self.Apply(a, b, c)
+        return self.m_reg == reg1
+
+    def GetReg(self, r):
+        """Returns the value of the given register"""
+
+        return self.m_reg[r]
+
+    def Evaluate(self, mpOpcodeOp, lOp):
+        # register is already set up, so run through ops doing the appropriate apply action
+
+        for op in lOp:
+            opk = mpOpcodeOp[op[0]].m_opk
+            fn = Op16.s_mpOpkFn[opk]
+            self.m_reg[op[3]] = fn(self, op[1], op[2])
+            print opk, self.m_reg
+
+def Parse16():
+    """Return the list of tests in day 16 input and the list of ops as a tuple of two lists"""
+
+    # extract the before/op/after triples from the input and the ops
+
+    s_reReg = re.compile(r'\S+:\s*\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)')
+
+    class Test:
+        pass
+
+    lTest = []
+    lOp = []
+    fInTest = False
+    for str0 in ain.s_strIn16.strip().split('\n'):
+        if str0.strip() == '':
+            continue
+
+        if str0.startswith('Before:'):
+            fInTest = True
+            match = s_reReg.search(str0)
+            assert match
+            lTest.append(Test())
+            lTest[-1].m_reg0 = [int(x) for x in match.groups()]
+        elif str0.startswith('After:'):
+            fInTest = False
+            match = s_reReg.search(str0)
+            assert match
+            lTest[-1].m_reg1 = [int(x) for x in match.groups()]
+        elif fInTest:
+            lTest[-1].m_op = [int(x) for x in str0.strip().split()]
+        else:
+            lOp.append([int(x) for x in str0.strip().split()])
+
+    return (lTest, lOp)
+
+def Day16a():
+    """Return the number of samples in the input which behave like three or more opcodes"""
+
+    lTest, lOp = Parse16()
+
+    print "Found {0} tests".format(len(lTest))
+
+    # construct a set of test opcode evaluators
+
+    lOp = [Op16(x) for x in Op16.s_mpOpkFn.keys()]
+
+    # apply the tests and count how many match more than three opcodes
+
+    cMatch = 0
+    for test in lTest:
+        cCur = 0
+        for op in lOp:
+            if op.Matches(test.m_reg0, test.m_reg1, test.m_op[1], test.m_op[2], test.m_op[3]):
+                cCur += 1
+                if cCur > 2:
+                    cMatch += 1
+                    break
+
+    # Hmm. First answer guess was 656, which was too high, so apparently I have something wrong somewhere. Great.
+
+    # Ah, ha! Forgot the first rule of python, which is that everything is a reference. I was modifying the test input
+    #  as things went along because of assigning it to the register for the opcode. Whee!
+
+    print "Found {c} tests that matched 3 or more opcodes".format(c=cMatch)
+
+def Day16b():
+    """Using the examples, figure out which opcode number is which opcode, and then run the test code and report the value in register 0 at the end"""
+
+    lTest, lOp = Parse16()
+
+    # Figure out which opcode numbers can be which opcodes
+
+    lOpEval = [Op16(x) for x in Op16.s_mpOpkFn.keys()]
+
+    mpOpcodeSetOp = {}
+
+    for test in lTest:
+        setOpCur = set()
+        for op in lOpEval:
+            if op.Matches(test.m_reg0, test.m_reg1, test.m_op[1], test.m_op[2], test.m_op[3]):
+                setOpCur.add(op)
+
+        mpOpcodeSetOp.setdefault(test.m_op[0], set(lOpEval)).intersection_update(setOpCur)
+
+    # Now, start cementing which is which by assigning things that only have one possibility,
+    #  removing those from all the rest, and so forth
+
+    mpOpcodeOp = {}
+    while len(mpOpcodeSetOp) > 0:
+        # find an opcode that only has one possibility in its set
+        for opcode, setOp in mpOpcodeSetOp.items():
+            if len(setOp) > 1:
+                continue
+
+            op = list(setOp)[0]
+            mpOpcodeOp[opcode] = op
+            del mpOpcodeSetOp[opcode]
+            break
+
+        for setOp in mpOpcodeSetOp.values():
+            if op in setOp:
+                setOp.remove(op)
+
+        print "Assigned opcode {o} to {opk}".format(o=opcode, opk=op.m_opk)
+
+    # Set up a single opcode to do our evaluation
+
+    opEval = Op16(Op16.OPK_addr)    # exact type doesn't matter
+    opEval.Evaluate(mpOpcodeOp, lOp)
+
 if __name__ == '__main__':
-    #Day15a()
-    Day15b()
+    Day16a()
+    Day16b()
