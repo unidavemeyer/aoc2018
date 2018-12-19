@@ -2174,6 +2174,250 @@ def Day16b():
     opEval = Op16(Op16.OPK_addr)    # exact type doesn't matter
     opEval.Evaluate(mpOpcodeOp, lOp)
 
+class Map17:  # tag = map
+    """Represent information in a map of various things"""
+
+    def __init__(self, str0):
+
+        self.m_mpPosCh = {}
+        self.m_rangeX = (1000000, -1000000)
+        self.m_rangeY = (1000000, -1000000)
+        self.m_cFall = 0
+
+        for str1 in str0.strip().split('\n'):
+            lPart = [x.strip() for x in str1.split(',')]
+            assert len(lPart) == 2
+
+            rangeX = None
+            rangeY = None
+
+            for part in lPart:
+                lPartS = part.split('=')
+                assert len(lPartS) == 2
+
+                if '..' in lPartS[1]:
+                    # range
+                    lRange = lPartS[1].split('.')
+                    assert len(lRange) == 3
+                    mic = int(lRange[0])
+                    most = int(lRange[-1]) 
+                else:
+                    # single value
+                    mic = int(lPartS[1])
+                    most = mic
+
+                if lPartS[0] == 'x':
+                    rangeX = (mic, most)
+                    self.m_rangeX = (min(self.m_rangeX[0], mic), max(self.m_rangeX[1], most))
+                else:
+                    assert lPartS[0] == 'y'
+                    rangeY = (mic, most)
+                    self.m_rangeY = (min(self.m_rangeY[0], mic), max(self.m_rangeY[1], most))
+
+            assert rangeX is not None
+            assert rangeY is not None
+
+            for x in range(rangeX[0], rangeX[1] + 1):
+                for y in range(rangeY[0], rangeY[1] + 1):
+                    self.m_mpPosCh[(x,y)] = '#'
+
+        print "Map size: x in {}, y in {}".format(self.m_rangeX, self.m_rangeY)
+
+    def AddSpring(self, x, y):
+        assert not self.m_mpPosCh.has_key((x,y))
+
+        self.m_mpPosCh[(x,y)] = '+'
+
+    def PosFallSpread(self, pos0, dX):
+        """Mark spreading (moving) water in the given dX from the given starting point. Return the end position and True to fall, False for blocked."""
+
+        while True:
+            posNext = (pos0[0] + dX, pos0[1])
+            ch = self.m_mpPosCh.get(posNext, '.')
+
+            if ch == '.' or ch == '|':
+                # spread
+                self.m_mpPosCh[posNext] = '|'
+
+                # check down
+                posDown = (posNext[0], posNext[1] + 1)
+                chDown = self.m_mpPosCh.get(posDown, '.')
+
+                if chDown == '.':
+                    # stop spreading; this is a fall location
+                    return (posNext, True)
+                elif chDown == '|':
+                    # we "fall" here down to the next flow, which we'll have to deal with appropriately
+                    #  in the fall logic cases...?
+                    return (posNext, True)
+                else:
+                    # keep spreading
+                    pos0 = posNext
+
+            elif ch == '#':
+                # hit an obstruction so stop; None = blocked
+                return (pos0, False)
+
+            else:
+                assert False, "Hit '{}' while spreading at {}!?".format(ch, posNext)
+
+    def Settle(self):
+        """Calculate what the steady state picture of water flow looks like going from the spring."""
+
+        # water goes down if it can
+        # if it can't, water spreads to both sides until blocked, or until it can go down again
+
+        # keep an open list of fall positions and loop advancing them as appropriate until we've solved
+        #  all of them
+
+        setPosFall = set([pos for pos, ch in self.m_mpPosCh.items() if ch == '+'])
+
+        while setPosFall:
+
+            lPosFall = sorted(setPosFall, key=lambda p: (-p[1], p[0]))
+
+            # print some periodic progress stuff so I can see what's going on, and maybe check for errors...
+
+            if self.m_cFall % 100 == 0:
+                sys.stderr.write('On step {}\n'.format(self.m_cFall))
+
+                mpPosChOver = {}
+                for iFall, posFall in enumerate(lPosFall):
+                    mpPosChOver[posFall] = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[iFall]
+                self.Print(mpPosChOver)
+
+            pos0 = lPosFall[0]
+            setPosFall = set(lPosFall[1:])
+
+            chCur = self.m_mpPosCh.get(pos0, '.')
+            if chCur == '#' or chCur == '~':
+                # this place is already blocked/filled, so add our up for further processing if applicable
+                posUp = (pos0[0], pos0[1] - 1)
+                chUp = self.m_mpPosCh.get(posUp, '.')
+                if chUp == '|':
+                    setPosFall.add(posUp)
+                else:
+                    sys.stdout.write("Found '{}' at {} (above {}) when scanning\n".format(chUp, posUp, pos0))
+                    mpPosChOver = {}
+                    mpPosChOver[posUp] = 'X'
+                    for posFall in setPosFall:
+                        mpPosChOver[posFall] = 'F'
+                    self.Print(mpPosChOver)
+                    break
+                continue
+
+            self.m_cFall += 1
+
+            while pos0[1] < self.m_rangeY[1]:
+                posNext = (pos0[0], pos0[1] + 1)
+
+                ch = self.m_mpPosCh.get(posNext, '.')
+                if ch == '#' or ch == '~':
+                    # Hit an obstruction (clay or stationary water) while falling, do a lateral scan.
+
+                    # Note that we'll have already marked pos0 with '|', so we just need to do that going
+                    #  to the sides
+
+                    posLeft, fallLeft = self.PosFallSpread(pos0, -1)
+                    posRight, fallRight = self.PosFallSpread(pos0, 1)
+
+                    if not fallLeft and not fallRight:
+                        # blocked on both sides -- mark everything from posLeft through posRight (inclusive) as
+                        #  filled water, and add an "up" position that's marked as flowing above us to continue
+                        #  the investigation
+
+                        posUp = None
+                        for x in range(posLeft[0], posRight[0] + 1):
+                            self.m_mpPosCh[(x,posLeft[1])] = '~'
+                            if self.m_mpPosCh.get((x, posLeft[1] - 1), '.') == '|':
+                                posUp = (x, posLeft[1] - 1)
+                        setPosFall.add(posUp)
+                    else:
+                        # add left and/or right to the open set and leave everything else alone
+
+                        if fallLeft:
+                            setPosFall.add(posLeft)
+
+                        if fallRight:
+                            setPosFall.add(posRight)
+
+                    # either way, we're done with this fall
+                    break
+                elif ch == '|':
+                    # hit a previously investigated area while falling, so give up because we should
+                    #  have already done the appropriate scanning at this location
+                    break
+                elif ch == '.':
+                    # hit an open (sand) area, so mark it as a falling value
+                    self.m_mpPosCh[posNext] = '|'
+                    pos0 = posNext
+
+    def Print(self, mpPosChOver):
+        """Print a little diagram of how the water and such looks"""
+
+        print "Fall {}".format(self.m_cFall)
+
+        for y in range(0, self.m_rangeY[1] + 1):
+            for x in range(self.m_rangeX[0] - 1, self.m_rangeX[1] + 2):
+                ch = mpPosChOver.get((x,y), None)
+                if ch is None:
+                    ch = self.m_mpPosCh.get((x,y), '.')
+                sys.stdout.write(ch)
+            sys.stdout.write('\n')
+
+    def CellsFilledInYRange(self):
+
+        c = 0
+        for pos, ch in self.m_mpPosCh.items():
+            if pos[1] < self.m_rangeY[0]:
+                continue
+
+            if pos[1] > self.m_rangeY[1]:
+                continue
+
+            if ch == '|' or ch == '~':
+                c += 1
+
+        return c
+
+    def CellsPermInYRange(self):
+
+        c = 0
+        for pos, ch in self.m_mpPosCh.items():
+            if pos[1] < self.m_rangeY[0]:
+                continue
+
+            if pos[1] > self.m_rangeY[1]:
+                continue
+
+            if ch == '~':
+                c += 1
+
+        return c
+
+def Day17a():
+    """Simulate some stuff regarding water"""
+
+    map0 = Map17(ain.s_strIn17)
+    map0.AddSpring(500,0)
+    map0.Settle()
+
+    # Show final state, for verification purposes
+
+    map0.Print({})
+
+    # Calculate information about filled cells
+
+    print "Filled {} cells".format(map0.CellsFilledInYRange())
+
+
+def Day17b():
+    map0 = Map17(ain.s_strIn17)
+    map0.AddSpring(500,0)
+    map0.Settle()
+
+    print "Retained {} cells".format(map0.CellsPermInYRange())
+
 if __name__ == '__main__':
-    Day16a()
-    Day16b()
+    #Day17a()
+    Day17b()
