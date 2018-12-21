@@ -2418,6 +2418,146 @@ def Day17b():
 
     print "Retained {} cells".format(map0.CellsPermInYRange())
 
+class Map18:
+    """Resource map for day 18 problem; contains open (.) wooded (|) and lumberyard (#) spaces."""
+
+    def __init__(self):
+        self.m_mpPosCh = {}
+        self.Load(ain.s_strIn18)
+
+    def Load(self, strIn):
+        for y, str0 in enumerate(strIn.strip().split('\n')):
+            for x, ch in enumerate(str0):
+                self.m_mpPosCh[(x,y)] = ch
+
+    def Advance(self):
+        """Advance the map by one "minute" by calculating a new map and replacing the current with the new one"""
+
+        mpPosChSrc = self.m_mpPosCh
+        mpPosChDst = {}
+
+        for pos, chSrc in mpPosChSrc.items():
+
+            # Build neighbor count map
+
+            mpChC = {}
+            for dy in [-1, 0, 1]:
+                for dx in [-1, 0, 1]:
+                    if dy == 0 and dx == 0:
+                        continue
+
+                    posOther = (pos[0] + dx, pos[1] + dy)
+                    chOther = mpPosChSrc.get(posOther, None)
+                    c = mpChC.get(chOther, 0) + 1
+                    mpChC[chOther] = c
+
+            # Determine next state based on current and neighbors
+
+            chDst = chSrc
+            if chSrc == '.':
+                if mpChC.get('|', 0) > 2:
+                    chDst = '|'
+            elif chSrc == '|':
+                if mpChC.get('#', 0) > 2:
+                    chDst = '#'
+            elif chSrc == '#':
+                if mpChC.get('#', 0) < 1 or mpChC.get('|', 0) < 1:
+                    chDst = '.'
+
+            mpPosChDst[pos] = chDst
+
+        # Swap to the new map
+
+        self.m_mpPosCh = mpPosChDst
+
+    def Score(self):
+        cWood = 0
+        cLy = 0
+        for ch in self.m_mpPosCh.values():
+            if ch == '|':
+                cWood += 1
+            elif ch == '#':
+                cLy += 1
+
+        return cWood * cLy
+
+    def Print(self):
+        setX = set([x for x, y in self.m_mpPosCh.keys()])
+        setY = set([y for x, y in self.m_mpPosCh.keys()])
+
+        for y in sorted(setY):
+            for x in sorted(setX):
+                sys.stdout.write(self.m_mpPosCh.get((x,y), '?'))
+            sys.stdout.write('\n')
+
+def Day18a():
+
+    map0 = Map18()
+
+    for i in range(10):
+        map0.Advance()
+        print "Iteration {d}".format(d=i)
+        map0.Print()
+
+    print "Final score: {s}".format(s=map0.Score())
+
+def Day18b():
+
+    map0 = Map18()
+    iMax = 10000
+
+    setScore = set()
+    cDupSeq = 0
+    for i in range(iMax):
+        map0.Advance()
+        score = map0.Score()
+        if score not in setScore:
+            setScore.add(score)
+            cDupSeq = 0
+        else:
+            cDupSeq += 1
+
+        if cDupSeq > 100:
+            print "Found string of 100 duplicated scores at iteration {i}".format(i=i)
+            break
+        #map0.Print()
+
+    if i >= iMax:
+        print "Did not find pattern in time!"
+        return
+
+    # We've probably found someplace that goes around and around, so figure out what the pattern
+    #  is and how its scores map to indices, so that we can calculate the value for the huge index
+    #  that's our goal
+
+    lScore = []
+
+    for i1 in range(100):
+        lScore.append(map0.Score())
+        map0.Advance()
+
+    iScoreMax = -1
+    for iScore, score in enumerate(lScore):
+        if score == lScore[0] and iScore != 0:
+            iScoreMax = iScore
+        elif iScoreMax > 0:
+            assert lScore[iScore % iScoreMax] == score
+
+    print "Repeated pattern covers {x} scores".format(x=iScoreMax)
+
+    # Now we should have a regular pattern in lScore, that maps to something useful against our
+    #  target index. lScore[0] should map to i, and everything repeats from there, so subtract i
+    #  from our goal, calculate the modulus, and look up the result.
+
+    # Bleah, got 203814 (iScore 53), which appears to be off by something.
+    # Ah, ha! I forgot that I'm 0-indexed, not 1-indexed. Adjusted below to subtract 1, and all is well.
+
+    goal = 1000000000
+    adj = goal - i - 1  # 0-indexed!
+    iScore = adj % iScoreMax
+
+    print "Goal is equivalent to score {j} which is {s}".format(j=iScore, s=lScore[iScore])
+
 if __name__ == '__main__':
-    #Day17a()
-    Day17b()
+    Day18a()
+    Day18b()
