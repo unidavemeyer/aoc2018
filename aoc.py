@@ -2558,6 +2558,115 @@ def Day18b():
 
     print "Goal is equivalent to score {j} which is {s}".format(j=iScore, s=lScore[iScore])
 
+
+class Sim19:    # tag = sim
+    """Simulator for day 19 problem, which uses the Op16 class augmented with an instruction pointer register directive"""
+
+    def __init__(self, lStr):
+        self.m_lOpt = None      # op tuples
+        self.m_iRegIp = None    # which register is bound to the ip
+        self.m_ip = 0           # current value of the ip
+        self.m_aReg = None      # current values of the registers
+        self.m_cStep = 0        # number of steps it took to execute to termination
+
+        # Check for IP remaps...should hopefully only have one?
+
+        iStrRemove = None
+        for iStr, str0 in enumerate(lStr):
+            if str0.startswith('#ip '):
+                if self.m_iRegIp is not None:
+                    raise Exception("Found multiple #ip directives, need to rethink plan")
+
+                self.m_iRegIp = int(str0.split()[-1])
+                iStrRemove = iStr
+
+        if self.m_iRegIp is None:
+            raise Exception("Did not find an #ip directive")
+
+        lStr[iStrRemove:iStrRemove + 1] = []
+
+        # Convert input strings (all should now be instructions) into op tuples
+
+        lTup = [tuple(x.split()) for x in lStr]
+        self.m_lOpt = [(x[0], int(x[1]), int(x[2]), int(x[3])) for x in lTup]
+
+    def Execute(self, aReg=None):
+
+        # initialize registers and ip
+
+        self.m_cStep = 0
+        self.m_ip = 0
+
+        if aReg is None:
+            self.m_aReg = [0] * 6
+        else:
+            self.m_aReg = aReg
+            assert len(aReg) == 6
+
+        while self.m_ip >= 0 and self.m_ip < len(self.m_lOpt):
+
+            # Plug ip into appropriate register
+
+            self.m_aReg[self.m_iRegIp] = self.m_ip
+
+            # Run instruction
+
+            opt = self.m_lOpt[self.m_ip]
+            op = Op16(opt[0])
+            op.m_reg = self.m_aReg
+            op.Apply(opt[1], opt[2], opt[3])
+
+            # Pull ip from register and increment it
+
+            self.m_ip = self.m_aReg[self.m_iRegIp] + 1
+
+            # helper to figure out what's going on...maybe?
+
+            if self.m_cStep % 10000 == 9999:
+                print "Step {step} register values: {reg}".format(step=self.m_cStep, reg=self.m_aReg)
+
+            # Update bookkeeping
+
+            self.m_cStep += 1
+
+def Day19a():
+    """Augment the previous "watch opcode" system to use 6 registers (0-5) instead of four, and to include a new directive
+    which causes the instruction pointer to be bound to a particular register. Determine the value of register 0 when the
+    program (the input) terminates"""
+
+    # Load the program input
+
+    lStr0 = ain.s_strIn19.strip().split('\n')
+
+    # Run a simulation through the opcode + ip directive system
+
+    sim = Sim19(lStr0)
+    sim.Execute()
+
+    print "Simulation ended with register values {reg} in {step} steps".format(reg=sim.m_aReg, step=sim.m_cStep)
+
+    pass
+
+def Day19b():
+    """Use every so slightly a different input to start with...yay...and of course, it now runs forever."""
+
+    # Load the program input
+
+    lStr0 = ain.s_strIn19.strip().split('\n')
+
+    # Run a simulation through the opcode + ip directive system
+
+    # Of course, this won't actually work, because even after 80 million steps through the simulation, we're still not
+    #  halted. By inspection of the output every 10k steps, it appears that we're going through some kind of loop that's
+    #  incrementing values up until they meet/exceed/something the register 1 value, which is 10551383 (at least, it appears
+    #  to be that way). I'll need to do some further actual analysis of what's being executed here, but it looks like we're
+    #  hitting some kind of horrible "busy work" that's modifying only slightly the values in the registers.
+
+    sim = Sim19(lStr0)
+    sim.Execute([1, 0, 0, 0, 0, 0])
+
+    print "Simulation B ended with register values {reg} in {step} steps".format(reg=sim.m_aReg, step=sim.m_cStep)
+
 if __name__ == '__main__':
-    Day18a()
-    Day18b()
+    #Day19a()
+    Day19b()
