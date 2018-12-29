@@ -2590,7 +2590,7 @@ class Sim19:    # tag = sim
         lTup = [tuple(x.split()) for x in lStr]
         self.m_lOpt = [(x[0], int(x[1]), int(x[2]), int(x[3])) for x in lTup]
 
-    def Execute(self, aReg=None):
+    def Setup(self, aReg):
 
         # initialize registers and ip
 
@@ -2603,31 +2603,32 @@ class Sim19:    # tag = sim
             self.m_aReg = aReg
             assert len(aReg) == 6
 
+    def Step(self):
+        # Plug ip into appropriate register
+
+        self.m_aReg[self.m_iRegIp] = self.m_ip
+
+        # Run instruction
+
+        opt = self.m_lOpt[self.m_ip]
+        op = Op16(opt[0])
+        op.m_reg = self.m_aReg
+        op.Apply(opt[1], opt[2], opt[3])
+
+        # Pull ip from register and increment it
+
+        self.m_ip = self.m_aReg[self.m_iRegIp] + 1
+
+        # Update bookkeeping
+
+        self.m_cStep += 1
+
+    def Execute(self, aReg=None):
+
+        self.Setup(aReg)
+
         while self.m_ip >= 0 and self.m_ip < len(self.m_lOpt):
-
-            # Plug ip into appropriate register
-
-            self.m_aReg[self.m_iRegIp] = self.m_ip
-
-            # Run instruction
-
-            opt = self.m_lOpt[self.m_ip]
-            op = Op16(opt[0])
-            op.m_reg = self.m_aReg
-            op.Apply(opt[1], opt[2], opt[3])
-
-            # Pull ip from register and increment it
-
-            self.m_ip = self.m_aReg[self.m_iRegIp] + 1
-
-            # helper to figure out what's going on...maybe?
-
-            if self.m_cStep % 10000 == 9999:
-                print "Step {step} register values: {reg}".format(step=self.m_cStep, reg=self.m_aReg)
-
-            # Update bookkeeping
-
-            self.m_cStep += 1
+            self.Step()
 
 def Day19a():
     """Augment the previous "watch opcode" system to use 6 registers (0-5) instead of four, and to include a new directive
@@ -2662,10 +2663,87 @@ def Day19b():
     #  to be that way). I'll need to do some further actual analysis of what's being executed here, but it looks like we're
     #  hitting some kind of horrible "busy work" that's modifying only slightly the values in the registers.
 
-    sim = Sim19(lStr0)
-    sim.Execute([1, 0, 0, 0, 0, 0])
+    # Here's the input program:
+    # #ip 5
+    # 00 addi 5 16 5    // 0: reg 5 = reg 5 + 16 -> ip = 16 (-> 17) [0(1), 0, 0, 0, 0, 16]
+    # 01 seti 1 2 2
 
-    print "Simulation B ended with register values {reg} in {step} steps".format(reg=sim.m_aReg, step=sim.m_cStep)
+    # PRE:
+    # 02 seti 1 0 4     // r4 = 1
+
+    # LOOP:
+    # 03 mulr 2 4 3     // r3 = r2 * r4
+    # 04 eqrr 3 1 3     // r3 = 1 if r3 == r1 else 0 (USUALLY 0)
+    # 05 addr 3 5 5     // r5 = r3 + r5 (USUALLY 05 -> 06, RARELY 06 -> 07)
+    # 06 addi 5 1 5     // r5 = r5 + 1 -> 07 -> ip = 08
+    # 07 addr 2 0 0     // r0 = r2 + r0 (USUALLY SKIPPED) (add r2 to r0 whenever r2 * r4 == r1)
+    # 08 addi 4 1 4     // r4 = r4 + 1 (increment r4)
+    # 09 gtrr 4 1 3     // r3 = 1 if r4 > r1 else 0 (USUALLY 0)
+    # 10 addr 5 3 5     // r5 = r5 + r3 (USUALLY 10 -> 11, RARELY 11 -> 12)
+    # 11 seti 2 4 5     // r5 = 2 (LOOP)
+
+    # 12 addi 2 1 2     // r2 = r2 + 1 (increment r2 whenever r4 goes past r1)
+    # 13 gtrr 2 1 3     // r3 = 1 if r2 > r1 else 0
+    # 14 addr 3 5 5     // r5 = r3 + r5
+    # 15 seti 1 1 5     // r5 = 1 (PRE) (go back to r4 = 1; r2 will be one bigger)
+    # 16 mulr 5 5 5     // r5 = r5 * r5 (TERMINATE)
+
+    # 17 addi 1 2 1     // 1: reg 1 = reg 1 + 2 -> 2 [0(1), 2, 0, 0, 0, 17]
+    # 18 mulr 1 1 1     // 2: reg 1 = reg 1 * reg 1 -> 4 [0(1), 4, 0, 0, 0, 18]
+    # 19 mulr 5 1 1     // 3: reg 1 = reg 5 * reg 1 -> 19 (ip) * 4 -> 76 [0(1), 76, 0, 0, 0, 19]
+    # 20 muli 1 11 1    // 4: reg 1 = reg 1 * 11 -> 76 * 11 -> 836 [0(1), 836, 0, 0, 0, 20]
+    # 21 addi 3 6 3     // 5: reg 3 = reg 3 + 6 -> 6 [0(1), 836, 0, 6, 0, 21]
+    # 22 mulr 3 5 3     // 6: reg 3 = reg 3 * reg 5 -> 6 * 22 (ip) -> 132 [0(1), 836, 0, 132, 0, 22]
+    # 23 addi 3 15 3    // 7: reg 3 = reg 3 + 15 -> 132 + 15 -> 147 [0(1), 836, 0, 132, 0, 23]
+    # 24 addr 1 3 1     // 8: reg 1 = reg 1 + reg 3 -> 836 + 147 -> 983
+    # 25 addr 5 0 5     // 9: reg 5 = reg 5 + reg 0 -> 25 (ip) + 0 (a) or 1 (b) -> 25 or 26 -> ip = 26 (a) or 27 (b)
+    # 26 seti 0 7 5     // 10a: reg 5 = 0 -> ip = 1
+    # 27 setr 5 8 3     // 10b: reg 3 = reg 5 = 27 (ip)
+    # 28 mulr 3 5 3     // 11b: reg 3 = reg 3 * reg 5 = 27 * 28 (ip) = 756
+    # 29 addr 5 3 3     // 12b: reg 3 = reg 5 + reg 3 = 29 (ip) + 756 = 785
+    # 30 mulr 5 3 3     // 13b: reg 3 = reg 5 * reg 3 = 
+    # 31 muli 3 14 3    // 14b:
+    # 32 mulr 3 5 3
+    # 33 addr 1 3 1
+    # 34 seti 0 0 0
+    # 35 seti 0 6 5     // reg 5 = 0 -> ip = 1
+
+    # This is calculating the sum of all factors of the value in r1, I believe. Will check with results for r1 = 983,
+    #  and if this works, will calculate the sum of all factors for the other. Divide is much better...
+
+    sim = Sim19(lStr0)
+    sim.Execute()
+
+    for term in (983, 10551383):
+        fact = 0
+        for i in range(term):
+            div = i + 1
+            r = term // div
+            if div * r == term:
+                fact += div
+
+        print "Simulation for small case arrives at {sim}, direct gives {d}".format(sim=sim.m_aReg[0], d=fact)
+
+    fPrintSteps = False
+    if fPrintSteps:
+        for regIn in [None, [1, 0, 0, 0, 0, 0]]:
+            print "Simluation with {reg}".format(reg=regIn)
+
+            sim.Setup(regIn)
+
+            for i in range(200):
+                reg0 = []
+                reg0.extend(sim.m_aReg)
+
+                opt = sim.m_lOpt[sim.m_ip]
+
+                sim.Step()
+
+                reg1 = sim.m_aReg
+
+                print "{reg0:40} {opt:20} {reg1:40}".format(reg0=str(reg0), opt=str(opt), reg1=str(reg1))
+
+    print "Simulation B would have ended with register 0 value {reg}".format(reg=fact)
 
 if __name__ == '__main__':
     #Day19a()
