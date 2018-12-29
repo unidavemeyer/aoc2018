@@ -2745,6 +2745,133 @@ def Day19b():
 
     print "Simulation B would have ended with register 0 value {reg}".format(reg=fact)
 
+def LStrSub20(strIn, iCh0):
+    assert strIn[iCh0] == '('
+    
+    lStr = []
+    strC = ''
+    iCh1 = iCh0 + 1
+    while strIn[iCh1] != ')':
+        if strIn[iCh1] == '|':
+            lStr.append(strC)
+            strC = ''
+            iCh1 += 1
+        elif strIn[iCh1] == '(':
+            lStrSub, iCh1 = LStrSub20(strIn, iCh1)
+            for strSub in lStrSub:
+                lStr.append(strC + strSub)
+        else:
+            strC += strIn[iCh1]
+            iCh1 += 1
+    return lStr, iCh1 + 1
+
+def LStrExpand20(strIn):
+    """Return the list of expanded strings that match the given regular expression"""
+
+    # I have something wrong here, and even some simple-ish test cases don't work right, so I'm
+    #  throwing out this plan and going for a state machine. yay.
+
+    lStr = ['']
+    iChEnd = 0
+    while iChEnd < len(strIn):
+        if strIn[iChEnd] == '(':
+            lStrSub, iChEnd = LStrSub20(strIn, iChEnd)
+            lStrOut = []
+            for str0 in lStr:
+                for str1 in lStrSub:
+                    lStrOut.append(str0 + str1)
+            lStr = lStrOut
+        else:
+            for i in range(len(lStr)):
+                lStr[i] = lStr[i] + strIn[iChEnd]
+            iChEnd += 1
+
+    return lStr
+
+def LStrExpand20b(strIn):
+
+    iCh = 0
+    lCStrGroup = [1]
+    llStr = [['']]
+
+    while iCh < len(strIn):
+
+        if strIn[iCh] == '(':
+            # start of a new sub-group
+            llStr.append([''])
+            lCStrGroup.append(1)
+
+            assert len(llStr[-1]) == 1
+            assert len(llStr) == len(lCStrGroup)
+
+        elif strIn[iCh] == ')':
+            # end of a sub-group -- pull it off, and merge it with all of the per-group
+            #  items in the currently active group
+
+            lStrSub = llStr[-1]
+            llStr = llStr[:-1]
+            assert len(llStr) > 0
+
+            lStrTail = []
+            lCStrGroup = lCStrGroup[:-1]
+            lStrHead = llStr[-1][-lCStrGroup[-1]:]
+            print "hds: {d}".format(d=len(lStrHead))
+
+            for str0 in lStrHead:
+                for str1 in lStrSub:
+                    lStrTail.append(str0 + str1)
+            llStr[-1] = llStr[-1][:-lCStrGroup[-1]]
+            llStr[-1].extend(lStrTail)
+            lCStrGroup[-1] = len(lStrTail)
+
+            print "eog: {d}".format(d=len(lStrTail))
+
+            assert len(llStr) == len(lCStrGroup)
+
+        elif strIn[iCh] == '|':
+            # new option in a group
+            llStr[-1].append('')
+            lCStrGroup[-1] = 1
+
+        else:
+            # regular character, accumulate into current strings for the group
+
+            assert len(llStr[-1]) > 0
+            iStr = -lCStrGroup[-1]
+            while iStr < 0:
+                llStr[-1][iStr] += strIn[iCh]
+                iStr += 1
+
+        # always march forward in the string
+
+        iCh += 1
+
+    assert len(llStr) == 1
+    return llStr[0]
+
+def Day20a():
+    """Calculate the largest string that matches a regex that uses grouping and such."""
+
+    #s_strIn = 'WNE'
+    #s_strIn = 'ENWWW(NEEE|SSE(EE|N))'
+    #s_strIn = '(NEWS|WNSE|)'
+    s_strIn = 'ENNWSWW(NEWS|)SSSEEN(WNSE|)EE(SWEN|)NNN'
+
+    lStr = LStrExpand20b(s_strIn)
+    #print lStr
+
+    lC = [len(s) for s in lStr]
+    c = max(lC)
+
+    # the longest string is great, but doesn't actually calculate the shortest number of doors to get
+    #  anywhere, so we'll need to use this data to actually build a map, and then calculate a real
+    #  BFS on the resulting graph to calculate the answer we need
+
+    print "longest string: {c}, strings: {s}".format(c=c, s=len(lStr))
+
+def Day20b():
+    pass
+
 if __name__ == '__main__':
-    #Day19a()
-    Day19b()
+    Day20a()
+    Day20b()
