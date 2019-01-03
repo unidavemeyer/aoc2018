@@ -2815,7 +2815,7 @@ def LStrExpand20b(strIn):
             lStrTail = []
             lCStrGroup = lCStrGroup[:-1]
             lStrHead = llStr[-1][-lCStrGroup[-1]:]
-            print "hds: {d}".format(d=len(lStrHead))
+            #print "hds: {d}".format(d=len(lStrHead))
 
             for str0 in lStrHead:
                 for str1 in lStrSub:
@@ -2824,7 +2824,7 @@ def LStrExpand20b(strIn):
             llStr[-1].extend(lStrTail)
             lCStrGroup[-1] = len(lStrTail)
 
-            print "eog: {d}".format(d=len(lStrTail))
+            #print "eog: {d}".format(d=len(lStrTail))
 
             assert len(llStr) == len(lCStrGroup)
 
@@ -2849,25 +2849,220 @@ def LStrExpand20b(strIn):
     assert len(llStr) == 1
     return llStr[0]
 
+class Graph20:
+    """Represents the reachability graph for the day 20 problems"""
+
+    def __init__(self, lStr):
+
+        self.m_mpPosCh = {}
+
+        # import reachability information from a list of strings, or build it from
+        # a RE string directly
+
+        if isinstance(lStr, list()):
+            for str0 in lStr:
+                self.AddWalk(str0)
+        else:
+            self.PopulateRe(lStr)
+
+        # calculate extents
+
+        lX = [pos[0] for pos in self.m_mpPosCh.keys()]
+        lY = [pos[1] for pos in self.m_mpPosCh.keys()]
+        self.m_posMin = (min(lX), min(lY))
+        self.m_posMax = (max(lX), max(lY))
+
+    def AddWalk(self, strIn):
+        """Add the given walk from strIn to the graph"""
+
+        mpChDpos = {
+                'N' : (0, -1),
+                'S' : (0, 1),
+                'E' : (1, 0),
+                'W' : (-1, 0),
+            }
+
+        pos = (0,0)
+        self.m_mpPosCh[pos] = 'X'   # maybe use '.' instead?
+
+        for ch in strIn:
+            dPos = mpChDpos[ch]
+
+            posDoor = (pos[0] + dPos[0], pos[1] + dPos[1])
+            chDoor = '|' if dPos[1] == 0 else '-'
+            assert self.m_mpPosCh.get(posDoor, chDoor) == chDoor
+            self.m_mpPosCh[posDoor] = chDoor
+
+            posNext = (posDoor[0] + dPos[0], posDoor[1] + dPos[1])
+            assert self.m_mpPosCh.get(posNext, '.') == '.'
+            self.m_mpPosCh[posNext] = '.'
+
+            pos = posNext
+
+    def PopulateRe(self, strIn):
+        """Convert the regular expression given into a graph of nodes, and then fill the XY graph from that data"""
+
+        class Node:
+            def __init__(self):
+                self.m_str = ''
+                self.m_lNodeParent = []
+                self.m_lNodeNext = []
+
+        iCh = 0
+        nodeRoot = Node()
+        nodeCur = nodeRoot
+        lNodeOpen = []
+
+        while iCh < len(strIn):
+
+            if strIn[iCh] == '(':
+                # start of a new sub-group, so add a new child to the current parent
+
+                assert len(nodeCur.m_lNodeNext) == 0
+
+                nodeNew = Node()
+                nodeNew.m_lNodeParent.append(nodeCur)
+                nodeCur.m_lNodeNext.append(nodeNew)
+                lNodeOpen.append(nodeCur)
+                nodeCur = nodeNew
+
+            elif strIn[iCh] == ')':
+                # end of a sub-group; add a new node that has all of the children of the current node's
+                # parent as parents, and make that the current node
+
+                nodeNew = Node()
+
+                assert len(nodeCur.m_lNodeParent) == 1
+                nodePar = nodeCur.m_lNodeParent[0]
+
+                setNodeLeaf = set()
+                for nodeChild in nodePar.m_lNodeNext:
+                    # have to walk down to the "leaf" nodes of each child...bleah...what a drag; some may be
+                    # their own leaves, and others will have descendants. I *think* that the descendant case
+                    # ought to have all a single leaf a the end, though, because by construction when a group
+                    # ends everything in that group gets a single "terminal" node (as we're doing here)
+
+                    nodeLeaf = nodeChild
+                    while nodeLeaf.m_lNodeNext:
+                        nodeLeaf = nodeLeaf.m_lNodeNext[0]
+
+                    setNodeLeaf.add(nodeLeaf)
+
+                # make new the next for all of the leaves, and make all of the leaves parents of new
+
+                for nodeLeaf in setNodeLeaf:
+                    nodeLeaf.m_lNodeNext.append(nodeNew)
+                    nodeNew.m_lNodeParent.append(nodeLeaf)
+
+                nodeCur = nodeNew
+
+            elif strIn[iCh] == '|':
+                # new option in a group; start a new node as a child of the current node's parent
+
+                assert len(nodeCur.m_lNodeParent) == 1
+                nodePar = nodeCur.m_lNodeParent[0]
+                nodeNew = Node()
+                nodeNew.m_lNodeParent.append(nodePar)
+                nodePar.m_lNodeNext.append(nodeNew)
+                nodeCur = nodeNew
+
+            else:
+                # regular character, accumulate into current node
+
+                nodeCur.m_str += strIn[iCh]
+
+            # always march forward in the string
+
+            iCh += 1
+
+        assert len(llStr) == 1
+        return llStr[0]
+
+    def Print(self):
+        """Display cell information"""
+
+        for dY in range(self.m_posMax[1] - self.m_posMin[1] + 3):
+            y = self.m_posMin[1] + dY - 1
+
+            for dX in range(self.m_posMax[0] - self.m_posMin[0] + 3):
+                x = self.m_posMin[0] + dX - 1
+
+                sys.stdout.write(self.m_mpPosCh.get((x,y), '#'))
+
+            sys.stdout.write('\n')
+
+    def CWalkMax(self):
+        """Calculate the maximum walk distance necessary to reach any reachable cell from the origin"""
+
+        setChDoor = set(['|', '-'])
+        mpPosC = {}
+        lPosc = [(0,0,0)]
+
+        while lPosc:
+            posc = lPosc[0]
+            lPosc = lPosc[1:]
+
+            # ignore positions we've already visited; by BFS search design, we'll already have calculated
+            # the minimal count to get there
+
+            pos = (posc[0], posc[1])
+            c = posc[2]
+
+            if mpPosC.has_key(pos):
+                continue
+
+            mpPosC[pos] = c
+
+            # add possible next areas to lPosc; they'll all be the same distance away
+
+            c += 1
+
+            for dPos in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                posDoor = (pos[0] + dPos[0], pos[1] + dPos[1])
+                chDoor = self.m_mpPosCh.get(posDoor, '#')
+                if chDoor in setChDoor:
+                    posNext = (posDoor[0] + dPos[0], posDoor[1] + dPos[1])
+                    lPosc.append((posNext[0], posNext[1], c))
+                else:
+                    assert chDoor == '#'
+
+        return max(mpPosC.values())
+
 def Day20a():
     """Calculate the largest string that matches a regex that uses grouping and such."""
 
     #s_strIn = 'WNE'
     #s_strIn = 'ENWWW(NEEE|SSE(EE|N))'
-    #s_strIn = '(NEWS|WNSE|)'
-    s_strIn = 'ENNWSWW(NEWS|)SSSEEN(WNSE|)EE(SWEN|)NNN'
+    #s_strIn = 'ENNWSWW(NEWS|)SSSEEN(WNSE|)EE(SWEN|)NNN'
+    #s_strIn = 'ESSWWN(E|NNENN(EESS(WNSE|)SSS|WWWSSSSE(SW|NNNE)))'
+    #s_strIn = 'WSSEESWWWNW(S|NENNEEEENN(ESSSSW(NWSW|SSEN)|WSWWN(E|WWS(E|SS))))'
+    s_strIn = ain.s_strIn20[1:-1]   # strip leading ^ and trailing $
 
-    lStr = LStrExpand20b(s_strIn)
-    #print lStr
+    # OK, so fun layer 1: I apparently cannot expand these strings this way, because I run out of memory. Great!
+    # I think what I'll do instead is use a variant of the LStrExpand20b idea to build a tree of possible ways
+    # to walk the RE, and use that tree inside Graph20 to populate the actual graph. That will avoid converting
+    # everything to actual strings, and instead just keep short bits of strings in nodes.
+
+    #lStr = LStrExpand20b(s_strIn)
+    #print '\n'.join(lStr)
+
+    graph = Graph20(s_strIn)
+    graph.Print()
 
     lC = [len(s) for s in lStr]
     c = max(lC)
+    cWalk = graph.CWalkMax()
 
     # the longest string is great, but doesn't actually calculate the shortest number of doors to get
     #  anywhere, so we'll need to use this data to actually build a map, and then calculate a real
     #  BFS on the resulting graph to calculate the answer we need
 
-    print "longest string: {c}, strings: {s}".format(c=c, s=len(lStr))
+    # actually, I don't have to do the graph. I could do the "polymer reduction" thing that we did
+    # in yet another problem to "reduce away" redundant areas of the graph -- NS or SN cancel, mostly,
+    # for example. I'd have to keep track of a "high water mark" as I was going along to do that, but
+    # if I did so, I wouldn't have to generate the entire graph. I'll keep that in mind.
+
+    print "longest string: {c}, strings: {s}, max distance: {m}".format(c=c, s=len(lStr), m=cWalk)
 
 def Day20b():
     pass
