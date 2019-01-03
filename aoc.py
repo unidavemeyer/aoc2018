@@ -2859,7 +2859,7 @@ class Graph20:
         # import reachability information from a list of strings, or build it from
         # a RE string directly
 
-        if isinstance(lStr, list()):
+        if isinstance(lStr, type(list())):
             for str0 in lStr:
                 self.AddWalk(str0)
         else:
@@ -2902,16 +2902,19 @@ class Graph20:
     def PopulateRe(self, strIn):
         """Convert the regular expression given into a graph of nodes, and then fill the XY graph from that data"""
 
+        # Create node graph
+
         class Node:
             def __init__(self):
                 self.m_str = ''
-                self.m_lNodeParent = []
                 self.m_lNodeNext = []
 
         iCh = 0
         nodeRoot = Node()
         nodeCur = nodeRoot
         lNodeOpen = []
+        cOpenMax = 0
+        setNode = set()
 
         while iCh < len(strIn):
 
@@ -2921,19 +2924,21 @@ class Graph20:
                 assert len(nodeCur.m_lNodeNext) == 0
 
                 nodeNew = Node()
-                nodeNew.m_lNodeParent.append(nodeCur)
+                setNode.add(nodeNew)
                 nodeCur.m_lNodeNext.append(nodeNew)
                 lNodeOpen.append(nodeCur)
                 nodeCur = nodeNew
+                cOpenMax = max(cOpenMax, len(lNodeOpen))
 
             elif strIn[iCh] == ')':
                 # end of a sub-group; add a new node that has all of the children of the current node's
                 # parent as parents, and make that the current node
 
                 nodeNew = Node()
+                setNode.add(nodeNew)
 
-                assert len(nodeCur.m_lNodeParent) == 1
-                nodePar = nodeCur.m_lNodeParent[0]
+                nodePar = lNodeOpen[-1]
+                lNodeOpen = lNodeOpen[:-1]
 
                 setNodeLeaf = set()
                 for nodeChild in nodePar.m_lNodeNext:
@@ -2948,21 +2953,19 @@ class Graph20:
 
                     setNodeLeaf.add(nodeLeaf)
 
-                # make new the next for all of the leaves, and make all of the leaves parents of new
+                # make new the next for all of the leaves
 
                 for nodeLeaf in setNodeLeaf:
                     nodeLeaf.m_lNodeNext.append(nodeNew)
-                    nodeNew.m_lNodeParent.append(nodeLeaf)
 
                 nodeCur = nodeNew
 
             elif strIn[iCh] == '|':
                 # new option in a group; start a new node as a child of the current node's parent
 
-                assert len(nodeCur.m_lNodeParent) == 1
-                nodePar = nodeCur.m_lNodeParent[0]
+                nodePar = lNodeOpen[-1]
                 nodeNew = Node()
-                nodeNew.m_lNodeParent.append(nodePar)
+                setNode.add(nodeNew)
                 nodePar.m_lNodeNext.append(nodeNew)
                 nodeCur = nodeNew
 
@@ -2975,8 +2978,55 @@ class Graph20:
 
             iCh += 1
 
-        assert len(llStr) == 1
-        return llStr[0]
+        # debug assistance
+
+        assert len(lNodeOpen) == 0
+        print "Maximum open count: {c}, nodes: {n}".format(c=cOpenMax, n=len(setNode))
+
+        # Fill cells by walking the graph
+
+        self.m_mpPosCh[(0,0)] = 'X'   # maybe use '.' instead?
+        self.FillFromNode((0,0), nodeRoot, 0, set())
+
+    def FillFromNode(self, pos, node, cDepth, setPosNode):
+
+        mpChDpos = {
+                'N' : (0, -1),
+                'S' : (0, 1),
+                'E' : (1, 0),
+                'W' : (-1, 0),
+            }
+
+        assert cDepth < 800
+        if (pos, node) in setPosNode:
+            return
+
+        setPosNode.add((pos, node))
+
+        # Fill in values for current node string (which may be empty)
+
+        for ch in node.m_str:
+            dPos = mpChDpos[ch]
+
+            posDoor = (pos[0] + dPos[0], pos[1] + dPos[1])
+            chDoor = '|' if dPos[1] == 0 else '-'
+            assert self.m_mpPosCh.get(posDoor, chDoor) == chDoor
+            self.m_mpPosCh[posDoor] = chDoor
+
+            posNext = (posDoor[0] + dPos[0], posDoor[1] + dPos[1])
+            assert self.m_mpPosCh.get(posNext, '.') == '.'
+            self.m_mpPosCh[posNext] = '.'
+
+            pos = posNext
+
+        # Walk recursively down the node tree
+
+        try:
+            for nodeChild in node.m_lNodeNext:
+                self.FillFromNode(pos, nodeChild, cDepth + 1, setPosNode)
+        except AssertionError:
+            print "Node {i}, depth {d}: '{s}'".format(i=id(node), d=cDepth, s=node.m_str)
+            raise
 
     def Print(self):
         """Display cell information"""
@@ -2992,6 +3042,9 @@ class Graph20:
             sys.stdout.write('\n')
 
     def CWalkMax(self):
+        return self.CCWalkMax()[0]
+
+    def CCWalkMax(self):
         """Calculate the maximum walk distance necessary to reach any reachable cell from the origin"""
 
         setChDoor = set(['|', '-'])
@@ -3026,7 +3079,12 @@ class Graph20:
                 else:
                     assert chDoor == '#'
 
-        return max(mpPosC.values())
+        c1k = 0
+        for c in mpPosC.values():
+            if c >= 1000:
+                c1k += 1
+
+        return (max(mpPosC.values()), c1k)
 
 def Day20a():
     """Calculate the largest string that matches a regex that uses grouping and such."""
@@ -3036,7 +3094,7 @@ def Day20a():
     #s_strIn = 'ENNWSWW(NEWS|)SSSEEN(WNSE|)EE(SWEN|)NNN'
     #s_strIn = 'ESSWWN(E|NNENN(EESS(WNSE|)SSS|WWWSSSSE(SW|NNNE)))'
     #s_strIn = 'WSSEESWWWNW(S|NENNEEEENN(ESSSSW(NWSW|SSEN)|WSWWN(E|WWS(E|SS))))'
-    s_strIn = ain.s_strIn20[1:-1]   # strip leading ^ and trailing $
+    s_strIn = ain.s_strIn20.strip()[1:-1]   # strip leading ^ and trailing $
 
     # OK, so fun layer 1: I apparently cannot expand these strings this way, because I run out of memory. Great!
     # I think what I'll do instead is use a variant of the LStrExpand20b idea to build a tree of possible ways
@@ -3049,8 +3107,6 @@ def Day20a():
     graph = Graph20(s_strIn)
     graph.Print()
 
-    lC = [len(s) for s in lStr]
-    c = max(lC)
     cWalk = graph.CWalkMax()
 
     # the longest string is great, but doesn't actually calculate the shortest number of doors to get
@@ -3062,10 +3118,18 @@ def Day20a():
     # for example. I'd have to keep track of a "high water mark" as I was going along to do that, but
     # if I did so, I wouldn't have to generate the entire graph. I'll keep that in mind.
 
-    print "longest string: {c}, strings: {s}, max distance: {m}".format(c=c, s=len(lStr), m=cWalk)
+    print "max distance: {m}".format(m=cWalk)
 
 def Day20b():
-    pass
+
+    s_strIn = ain.s_strIn20.strip()[1:-1]   # strip leading ^ and trailing $
+
+    graph = Graph20(s_strIn)
+    graph.Print()
+
+    cWalk, c1k = graph.CCWalkMax()
+
+    print "max distance: {m}, rooms over 1k away: {r}".format(m=cWalk, r=c1k)
 
 if __name__ == '__main__':
     Day20a()
