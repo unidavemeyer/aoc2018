@@ -3193,12 +3193,6 @@ def Day21a():
     print "At cycle {cyc}, had registers {reg}".format(cyc=sim.m_cStep, reg=sim.m_aReg)
 
 def Day21b():
-    pass
-
-if __name__ == '__main__':
-    #Day21a()
-    Day21b()
-
     # So, the problem here is that the executed code as given is really slow (does lots of work for very minimal progress), so
     #  determining where it cycles is too slow. I've generated a new set of code that theoretically should match, but will run
     #  at a much faster rate, so that I can determine where the cycle is.
@@ -3251,3 +3245,107 @@ if __name__ == '__main__':
                 break
             setR3.add(r3)
             r3Prev = r3
+
+class Map22:
+    def __init__(self):
+        self.m_mpPosGi = {}
+        self.m_mpPosEl = {}
+        self.m_posEnter = (0,0)
+        self.m_posTarget = (0,0)
+        self.m_depth = 0
+
+    def SetTarget(self, pos):
+        self.m_posTarget = pos
+
+    def SetDepth(self, depth):
+        self.m_depth = depth
+
+    def Gi(self, pos):
+        gi = self.m_mpPosGi.get(pos, None)
+        if gi is not None:
+            return gi
+
+        if pos == self.m_posEnter:
+            gi = 0
+        elif pos == self.m_posTarget:
+            gi = 0
+        elif pos[1] == 0:
+            gi = pos[0] * 16807
+        elif pos[0] == 0:
+            gi = pos[1] * 48271
+        else:
+            pos0 = (pos[0] - 1, pos[1])
+            pos1 = (pos[0], pos[1] - 1)
+            gi = self.El(pos0) * self.El(pos1)
+
+        self.m_mpPosGi[pos] = gi
+        return gi
+
+    def El(self, pos):
+        el = self.m_mpPosEl.get(pos, None)
+        if el is not None:
+            return el
+
+        el = (self.Gi(pos) + self.m_depth) % 20183
+        self.m_mpPosEl[pos] = el
+        return el
+
+    def Ch(self, pos):
+        if pos == self.m_posEnter:
+            return 'M'
+
+        if pos == self.m_posTarget:
+            return 'T'
+
+        el = self.El(pos)
+        mod = el % 3
+        
+        return ['.', '=', '|'][mod]
+
+    def Calculate(self):
+        """Fill the map regions based on the enter and target locations"""
+
+        for y in range(self.m_posTarget[1] + 2):        # TODO: better range?
+            for x in range(self.m_posTarget[0] + 2):    # TODO: better range?
+                # throw away results, but get the map built so we can do fast lookups
+                self.El((x,y))
+
+    def Print(self):
+        for y in range(self.m_posTarget[1] + 2):
+            for x in range(self.m_posTarget[0] + 2):
+                sys.stdout.write(self.Ch((x,y)))
+            sys.stdout.write('\n')
+
+    def Risk(self, pos0, pos1):
+        """Calculate the risk level -- the sum of the values for the given rectangle"""
+
+        riskTotal = 0
+        for dY in range(pos1[1] - pos0[1] + 1):
+            for dX in range(pos1[0] - pos0[0] + 1):
+                pos = (pos0[0] + dX, pos0[1] + dY)
+                el = self.El(pos)
+                risk = el % 3
+                riskTotal += risk
+
+        return riskTotal
+
+def Day22a():
+
+    # dIn = { 'target' : (10,10), 'depth' : 510 }
+    dIn = { 'target' : (9,731), 'depth' : 11109 }
+
+    map0 = Map22()
+    map0.SetTarget(dIn['target'])
+    map0.SetDepth(dIn['depth'])
+    map0.Calculate()
+
+    map0.Print()
+    risk = map0.Risk(map0.m_posEnter, map0.m_posTarget)
+    print "Risk level: {risk}".format(risk=risk)
+
+def Day22b():
+    pass
+
+if __name__ == '__main__':
+    Day22a()
+    Day22b()
