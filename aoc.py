@@ -2003,6 +2003,10 @@ class Op16: # tag = op
     OPK_eqri = 'eqri'
     OPK_eqrr = 'eqrr'
 
+    # augmented (new) instruction to make things run faster
+
+    OPK_divi = 'divi'
+
     s_mpOpkFn = {
             OPK_addr : lambda self, a, b: self.GetReg(a) + self.GetReg(b),
             OPK_addi : lambda self, a, b: self.GetReg(a) + b,
@@ -2026,6 +2030,8 @@ class Op16: # tag = op
             OPK_eqir : lambda self, a, b: 1 if a == self.GetReg(b) else 0,
             OPK_eqri : lambda self, a, b: 1 if self.GetReg(a) == b else 0,
             OPK_eqrr : lambda self, a, b: 1 if self.GetReg(a) == self.GetReg(b) else 0,
+
+            OPK_divi : lambda self, a, b: self.GetReg(a) // b,
         }
 
     def __init__(self, opk):
@@ -3131,6 +3137,117 @@ def Day20b():
 
     print "max distance: {m}, rooms over 1k away: {r}".format(m=cWalk, r=c1k)
 
+def Day21a():
+
+    # q: what is the lowest non-negative value for r0 that will cause the "fewest" instructions
+    #  to be executed? In this case, instructions executed = cycles, where running the same instr
+    #  multiple times counts as multiple instrs.
+
+    # #ip 2                 r0 = X, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0
+    # 00 seti 123 0 3       r3 = 123 = o173
+    # 01 bani 3 456 3       r3 = r3 & 456 = r3 & o710 = o173 & o710 = o110 = 72
+    # 02 eqri 3 72 3        r3 = 1 if r3 == 72 else 0 [always 1]
+    # 03 addr 3 2 2         r2 = r3 + r2 = 1 + 3 = 4 => ip = 5
+    # 04 seti 0 0 2         
+    # 05 seti 0 0 3         r3 = 0
+    # 06 bori 3 65536 1     r1 = r3 | 65536 = 0 | 65536 = 65536
+    # 07 seti 4921097 0 3   r3 = 4921097
+    # 08 bani 1 255 4       r4 = r1 & 255 = 65536 & 255 = o200000 & o377 = 0, 257 & 255 = 0x101 & 0xff = 0x1 = 1
+    # 09 addr 3 4 3         r3 = r3 + r4 = 4921097 + 0 = 4921097, 4921098
+    # 10 bani 3 16777215 3  r3 = r3 & 16777215 = o22613411 & o77777777 = 4921097, 4921098
+    # 11 muli 3 65899 3     r3 = r3 * 65899 = 4921097 * 65899 = 0x4b8182a9c3 => assume 32-bit, get 0x8182a9c3, get 0x8182a9c4
+    # 12 bani 3 16777215 3  r3 = r3 & 0xffffff = 0x8182a9c3 & 0xffffff = 0x82a9c3, 0x82a9c4
+    # 13 gtir 256 1 4       r4 = 1 if 256 > r1 else 0 => 256 > 65536 => 0, 257 > 65536 => 0
+    # 14 addr 4 2 2         r2 = r4 + r2 = 0 + 14 = 14 => ip = 15
+    # 15 addi 2 1 2         r2 = r2 + 1 = 15 + 1 = 16 => ip = 17
+    # 16 seti 27 8 2
+    # 17 seti 0 5 4         r4 = 0
+    # 18 addi 4 1 5         r5 = r4 + 1 = 0 + 1 = 1, 2
+    # 19 muli 5 256 5       r5 = r5 * 256 = 1 * 256 = 256, 512
+    # 20 gtrr 5 1 5         r5 = 1 if r5 > r1 else 0 => 256 > 65536 => 0, 512 > 65536 => 0, eventually 1 (when r4 = 256)
+    # 21 addr 5 2 2         r2 = r5 + r2 = 0 + 21 = 21 => ip = 22, same, eventually 1 + 21 = 22 => ip = 23
+    # 22 addi 2 1 2         r2 = r2 + 1 = 22 + 1 = 23 => ip = 24, same
+    # 23 seti 25 1 2        r2 = 25 => ip = 26 (eventually)
+    # 24 addi 4 1 4         r4 = r4 + 1 = 0 + 1 = 1, 2
+    # 25 seti 17 8 2        r2 = 17 => ip = 18
+    # 26 setr 4 3 1         r1 = r4 = 257
+    # 27 seti 7 9 2         r2 = 7 => ip = 8
+    # 28 eqrr 3 0 4
+    # 29 addr 4 2 2
+    # 30 seti 5 4 2
+
+    # Looked at this by hand a bit, and there's a lot to track and get wrong. Instead, I'm going to run the simulation until it hits
+    # instruction 28, which is where r4 = r3 == r0, followed by r2 = r2 + r4, which if r4 = 1 will terminate
+
+    lStr = ain.s_strIn21.strip().split('\n')
+    sim = Sim19(lStr)
+    sim.Setup(None)
+
+    while sim.m_ip != 28:
+        sim.Step()
+
+    # This printed:
+    # At cycle 1846, had registers [0, 1, 27, 4797782, 1, 1]
+    # r3 == r0 => 4797782 == r0 -> want 4797782
+
+    print "At cycle {cyc}, had registers {reg}".format(cyc=sim.m_cStep, reg=sim.m_aReg)
+
+def Day21b():
+    pass
+
 if __name__ == '__main__':
-    Day20a()
-    Day20b()
+    #Day21a()
+    Day21b()
+
+    # So, the problem here is that the executed code as given is really slow (does lots of work for very minimal progress), so
+    #  determining where it cycles is too slow. I've generated a new set of code that theoretically should match, but will run
+    #  at a much faster rate, so that I can determine where the cycle is.
+
+    lStr = ain.s_strIn21.strip().split('\n')
+    sim = Sim19(lStr)
+    sim.Setup(None)
+
+    lStrFast = ain.s_strIn21fast.strip().split('\n')
+    simFast = Sim19(lStrFast)
+    simFast.Setup(None)
+
+    # Now, examine the sequence of values that we get for r3 as we execute
+
+    print "Checking first 100 i28 cases between sim and simFast..."
+
+    ipSim = 28
+    ipFast = 28 # TODO: FIX
+
+    cHit = 0
+    while cHit < 10:
+        sim.Step()
+
+        if sim.m_ip == ipSim:
+            r3Sim = sim.m_aReg[3]
+            cHit += 1
+
+            # advance simFast to the same point
+            simFast.Step()
+            while simFast.m_ip != ipFast:
+                simFast.Step()
+
+            r3Fast = simFast.m_aReg[3]
+            assert r3Sim == r3Fast, "Simulations diverged at hit {h}; orig = {r3}, fast = {r3f}".format(h=cHit, r3=r3Sim, r3f=r3Fast)
+
+    print "Cycles: old {old}, fast {fast}".format(old=sim.m_cStep, fast=simFast.m_cStep)
+
+    # Now, determine what the largest value is that will get us to cycle (may have to init with non-zero?)
+
+    setR3 = set()
+    simFast.Setup(None)
+    r3Prev = None
+    while True:
+        simFast.Step()
+
+        if simFast.m_ip == ipFast:
+            r3 = simFast.m_aReg[3]
+            if r3 in setR3:
+                print "Found cycle with r3 = {r3}, prev (answer) was {prev}".format(r3=r3, prev=r3Prev)
+                break
+            setR3.add(r3)
+            r3Prev = r3
