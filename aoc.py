@@ -1,5 +1,6 @@
 # solutions to various advent-of-code problems
 
+import heapq
 import re
 import sys
 
@@ -3193,12 +3194,6 @@ def Day21a():
     print "At cycle {cyc}, had registers {reg}".format(cyc=sim.m_cStep, reg=sim.m_aReg)
 
 def Day21b():
-    pass
-
-if __name__ == '__main__':
-    #Day21a()
-    Day21b()
-
     # So, the problem here is that the executed code as given is really slow (does lots of work for very minimal progress), so
     #  determining where it cycles is too slow. I've generated a new set of code that theoretically should match, but will run
     #  at a much faster rate, so that I can determine where the cycle is.
@@ -3251,3 +3246,256 @@ if __name__ == '__main__':
                 break
             setR3.add(r3)
             r3Prev = r3
+
+class Map22:
+    def __init__(self):
+        self.m_mpPosGi = {}
+        self.m_mpPosEl = {}
+        self.m_posEnter = (0,0)
+        self.m_posTarget = (0,0)
+        self.m_depth = 0
+
+    def SetTarget(self, pos):
+        self.m_posTarget = pos
+
+    def SetDepth(self, depth):
+        self.m_depth = depth
+
+    def Gi(self, pos):
+        gi = self.m_mpPosGi.get(pos, None)
+        if gi is not None:
+            return gi
+
+        if pos == self.m_posEnter:
+            gi = 0
+        elif pos == self.m_posTarget:
+            gi = 0
+        elif pos[1] == 0:
+            gi = pos[0] * 16807
+        elif pos[0] == 0:
+            gi = pos[1] * 48271
+        else:
+            pos0 = (pos[0] - 1, pos[1])
+            pos1 = (pos[0], pos[1] - 1)
+            gi = self.El(pos0) * self.El(pos1)
+
+        self.m_mpPosGi[pos] = gi
+        return gi
+
+    def El(self, pos):
+        el = self.m_mpPosEl.get(pos, None)
+        if el is not None:
+            return el
+
+        el = (self.Gi(pos) + self.m_depth) % 20183
+        self.m_mpPosEl[pos] = el
+        return el
+
+    def Ch(self, pos):
+        if pos == self.m_posEnter:
+            return '.'
+
+        if pos == self.m_posTarget:
+            return '.'
+
+        if pos[0] < 0 or pos[1] < 0:
+            return 'X'
+
+        el = self.El(pos)
+        mod = el % 3
+        
+        return ['.', '=', '|'][mod]
+
+    def Calculate(self):
+        """Fill the map regions based on the enter and target locations"""
+
+        for y in range(self.m_posTarget[1] + 2):        # TODO: better range?
+            for x in range(self.m_posTarget[0] + 2):    # TODO: better range?
+                # throw away results, but get the map built so we can do fast lookups
+                self.El((x,y))
+
+    def Print(self):
+        for y in range(self.m_posTarget[1] + 2):
+            for x in range(self.m_posTarget[0] + 2):
+                ch = self.Ch((x,y))
+                if self.m_posEnter == (x,y):
+                    ch = 'M'
+                elif self.m_posTarget == (x,y):
+                    ch = 'T'
+                sys.stdout.write(ch)
+            sys.stdout.write('\n')
+
+    def Risk(self, pos0, pos1):
+        """Calculate the risk level -- the sum of the values for the given rectangle"""
+
+        riskTotal = 0
+        for dY in range(pos1[1] - pos0[1] + 1):
+            for dX in range(pos1[0] - pos0[0] + 1):
+                pos = (pos0[0] + dX, pos0[1] + dY)
+                el = self.El(pos)
+                risk = el % 3
+                riskTotal += risk
+
+        return riskTotal
+
+    def ExtractTarget(self):
+        """Calculate a shortest path to reach the target, using a cost-based BFS"""
+
+        class Node:
+            def __init__(self, pos, cost, equip):
+                self.m_pos = pos
+                self.m_cost = cost
+                self.m_equip = equip
+
+            def __repr__(self):
+                return "({p}, {c}, {e})".format(p=self.m_pos, c=self.m_cost, e=self.m_equip)
+
+            def __eq__(self, other):
+                if not isinstance(other, type(self)):
+                    return False
+
+                return (self.m_pos, self.m_cost, self.m_equip) == (other.m_pos, other.m_cost, other.m_equip)
+
+            def __lt__(self, other):
+                if not isinstance(other, type(self)):
+                    return False
+
+                costSelf = self.m_cost
+                costOther = other.m_cost
+
+                return costSelf < costOther
+
+            def __le__(self, other):
+                if self.__lt__(other):
+                    return True
+
+                return self.__eq__(other)
+
+            def __hash__(self):
+                return hash((self.m_pos, self.m_cost, self.m_equip))
+
+        # keep track of what tools can be used in what cells
+
+        mpEquipSetCh = { 't' : set(['.', '|']), 'n' : set(['=', '|']), 'c' : set(['.', '=']), }
+        mpChSetEquip = { '.' : set(['t', 'c']), '=' : set(['n', 'c']), '|' : set(['t', 'n']), }
+
+        # start at the entrance with zero cost holding a torch
+
+        hqOpen = []
+        heapq.heappush(hqOpen, Node((0,0), 0, 't'))
+        setFound = set()
+        mpPosCost = {}
+
+        cExamine = 0
+        cAdd = 0
+        cSkip = 0
+
+        while hqOpen:
+            # get the cheapest open node
+
+            # heap queue keeps things sorted, theoretically...?
+
+            nodeCur = heapq.heappop(hqOpen)
+            cExamine += 1
+
+            # terminate the search if the current cost is larger than the best cost to reach the target (costs
+            #  are always increasing, so if the cheapest is too large, then we've finished our search)
+
+            if nodeCur.m_cost > mpPosCost.get(self.m_posTarget, nodeCur.m_cost):
+                print "Best node too high: {n}".format(n=nodeCur)
+                break
+
+            # record the cost in the map if we've found something better
+
+            cost = mpPosCost.get(nodeCur.m_pos, nodeCur.m_cost + 1)
+
+            if cost > nodeCur.m_cost:
+                cAdd += 1
+                mpPosCost[nodeCur.m_pos] = nodeCur.m_cost
+
+                # ensure we always have the full cost to have a torch at the target
+
+                if nodeCur.m_pos == self.m_posTarget and nodeCur.m_equip != 't':
+                    mpPosCost[nodeCur.m_pos] = nodeCur.m_cost + 7
+
+                # print "Added cost for {p} as {c}".format(p=nodeCur.m_pos, c=cost)
+
+                if False and len(mpPosCost) % 1000 == 999:
+                    print "pos/cost array has {c} elements".format(c=len(mpPosCost))
+                    pos = max(mpPosCost.keys())
+                    print "  maximal pos: {p}, cost {c}".format(p=pos, c=mpPosCost[pos])
+                    print "  current node: {n}".format(n=nodeCur)
+                    print "  target cost: {c}".format(c=mpPosCost.get(self.m_posTarget, -100))
+                    print "  examined: {e}, added {a}, skipped {s}".format(e=cExamine, a=cAdd, s=cSkip)
+
+            # skip this node if we've already found it (been at this position with this equipment; we ignore cost)
+
+            nodeCheck = Node(nodeCur.m_pos, -1, nodeCur.m_equip)
+            if nodeCheck in setFound:
+                cSkip += 1
+                continue
+
+            # debugging -- I didn't remember to include __hash__ or __eq__ on Node initially, so we were constantly
+            #  exploring the same things over and over again. Le sigh.
+
+            # print "exploring {c}: open {o}".format(c=nodeCur, o=setOpen)
+            # if len(setOpen) > 20:
+                # break
+
+            # mark that we've been here
+
+            setFound.add(nodeCheck)
+
+            # add adjacent cells that are reachable
+
+            setCh = mpEquipSetCh.get(nodeCur.m_equip, set())
+            for dPos in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                posNext = (nodeCur.m_pos[0] + dPos[0], nodeCur.m_pos[1] + dPos[1])
+                chNext = self.Ch(posNext)
+                if chNext in setCh:
+                    nodeFind = Node(posNext, -1, nodeCur.m_equip)
+                    if nodeFind not in setFound:
+                        heapq.heappush(hqOpen, Node(posNext, nodeCur.m_cost + 1, nodeCur.m_equip))
+
+            # add current cell with the alternate tool
+
+            setEquip = mpChSetEquip.get(self.Ch(nodeCur.m_pos), set())
+            setOther = setEquip - set([nodeCur.m_equip])
+            assert len(setOther) == 1
+
+            if Node(nodeCur.m_pos, -1, list(setOther)[0]) not in setFound:
+                heapq.heappush(hqOpen, Node(nodeCur.m_pos, nodeCur.m_cost + 7, list(setOther)[0]))
+
+        # This algorithm returned "1015" which apparently was someone else's answer, but not mine, and is too high. Hmm.
+
+        print "Best cost to target: {cost}".format(cost=mpPosCost.get(self.m_posTarget, -100))
+
+def Day22a():
+
+    # dIn = { 'target' : (10,10), 'depth' : 510 }
+    dIn = { 'target' : (9,731), 'depth' : 11109 }
+
+    map0 = Map22()
+    map0.SetTarget(dIn['target'])
+    map0.SetDepth(dIn['depth'])
+    map0.Calculate()
+
+    map0.Print()
+    risk = map0.Risk(map0.m_posEnter, map0.m_posTarget)
+    print "Risk level: {risk}".format(risk=risk)
+
+def Day22b():
+
+    # dIn = { 'target' : (10,10), 'depth' : 510 }
+    dIn = { 'target' : (9,731), 'depth' : 11109 }
+
+    map0 = Map22()
+    map0.SetTarget(dIn['target'])
+    map0.SetDepth(dIn['depth'])
+    map0.Calculate()
+
+    map0.ExtractTarget()
+
+if __name__ == '__main__':
+    Day22a()
+    Day22b()
