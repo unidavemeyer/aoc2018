@@ -3496,6 +3496,60 @@ def Day22b():
 
     map0.ExtractTarget()
 
+def LNb23():
+    """Return list of nanobots (x,y,z,r) for the day's input"""
+
+    #lStr = ain.s_strIn23a.strip().split('\n')
+    lStr = ain.s_strIn23.strip().split('\n')
+
+    reN = re.compile(r'pos=<(.*),(.*),(.*)>,\s*r=(.*)')
+
+    lNb = []
+    for str0 in lStr:
+        match = reN.search(str0)
+        if not match:
+            continue
+
+        lN = match.groups()
+        lNb.append(tuple([int(x) for x in lN]))
+
+    return lNb
+
+def SManh3d(pos0, pos1):
+    s = 0
+    for i in range(3):
+        s += abs(pos0[i] - pos1[i])
+
+    return s
+
+def Day23a():
+
+    lNb = LNb23()
+
+    # find the strongest (largest radius) nanobot
+
+    nbStrong = sorted(lNb, key=lambda x: x[3])[-1]
+
+    print "strongest nb: {n}".format(n=nbStrong)
+    print "  count: {c}".format(c=len(lNb))
+
+    # find how many nanobots are in range
+
+    cNb = 0
+    for nb in lNb:
+        if SManh3d(nb[:3], nbStrong[:3]) <= nbStrong[3]:
+            cNb += 1
+
+    # so, this worked fine for the example, but didn't work for my actual data. :/
+    # this produced 364, but that's apparently too low...?
+
+    # ah, found bug #1: my re wasn't accounting for negative values. great.
+
+    print "nb in range: {c}".format(c=cNb)
+
+def Day23b():
+    pass
+
 if __name__ == '__main__':
-    Day22a()
-    Day22b()
+    Day23a()
+    Day23b()
