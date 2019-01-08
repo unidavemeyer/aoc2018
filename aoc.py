@@ -3548,6 +3548,44 @@ def Day23a():
 
     print "nb in range: {c}".format(c=cNb)
 
+def SetPosGrow(posSeed, nb0, nb1, dX, dY, dZ):
+    """Return set of positions that nb0 and nb1 share in common, scanning around near posSeed, with
+    dX, dY, and dZ being the vectors indicating the quadrant (from nb0) that touches nb1"""
+
+    # algorithm: for an in-range point, try to add the "planar" points surrounding it; any that
+    #  succeed will then also be attempted, etc.
+
+    setPos = set()
+    setPos.add(tuple(posSeed))
+
+    lPosOpen = [posSeed]
+
+    while lPosOpen:
+        pos0 = lPosOpen[0]
+        assert pos0 in setPos
+        lPosOpen = lPosOpen[1:]
+
+        for dPos in [(dX, -dY, 0), (-dX, dY, 0), (0, -dY, dZ), (0, dY, -dZ), (-dX, 0, dZ), (dX, 0, -dZ)]:
+            pos1 = tuple([pos0[i] + dPos[i] for i in range(3)])
+            if SManh3d(nb0, pos1) > nb0[3]:
+                continue
+
+            if SManh3d(nb1, pos1) > nb1[3]:
+                continue
+
+            if pos1 in setPos:
+                continue
+
+            # in range, not checked
+
+            setPos.add(pos1)
+            lPosOpen.append(pos1)
+
+            if len(setPos) % 10000 == 9999:
+                print "Found {d} common positions so far, open has {o}".format(d=len(setPos), o=len(lPosOpen))
+
+    return setPos
+
 def Day23b():
     # calculate what points are in range of the maximal number of nb's, and then find
     #  the manhattan distance from those to the origin, and report the smallest such number
@@ -3765,14 +3803,46 @@ def Day23b():
                 # repeating for offsets in the other dimension. That should give a much faster cutoff when determining
                 # which points are allowed and which aren't.
 
-                posSeed = nb0[:3]
-                s = SManh3d(nb0[:3], nb1[:3])
-                dPos = ((nb1[0] - nb0[0]) * nb0[3] / s, (nb1[1] - nb0[1]) * nb0[3] / s, (nb1[2] - nb0[2]) * nb0[3] / s)
-                assert sum(dPos) == nb0[3], "sum was {x} but range was {r}".format(x=sum(dPos), r=nb0[3])
-                assert SManh3d([nb0[i] + dPos[i] for i in range(3)], nb1[:3]) <= nb1[3]
+                # So, I got this to work, I think, except I gut off SetPosGrow after I saw this output from it:
+                # Found 7529999 common positions so far, open has 9503
+
+                # basically, even the intersection points of a single pair of octahedrons is too big to process.
+
+                # calculate a point on the surface of nb0/nb1 that is "on" the segment between their centers
+
+                dPos = (nb1[0] - nb0[0], nb1[1] - nb0[1], nb1[2] - nb0[2])
+                sTotal = SManh3d(nb0[:3], nb1[:3])
+                assert sTotal == nb0[3] + nb1[3]
+
+                r = (1.0 * nb0[3]) / sTotal
+                dPos = [int(r * x) for x in dPos]
+                print "initial dpos: {d} ({s} vs {s2})".format(d=dPos, s=sum([abs(x) for x in dPos]), s2=nb0[3])
+
+                i = 0 if dPos[0] != 0 else 1
+                while sum([abs(x) for x in dPos]) > nb0[3]:
+                    print "reducing {i}".format(i=i)
+                    dPos[i] += 1 if dPos[i] < 0 else -1
+
+                while sum([abs(x) for x in dPos]) < nb0[3]:
+                    print "increasing {i}".format(i=i)
+                    dPos[i] += 1 if dPos[i] > 0 else -1
+
+                posSeed = (nb0[0] + dPos[0], nb0[1] + dPos[1], nb0[2] + dPos[2])
+                s = SManh3d(nb0[:3], posSeed)
+                assert s == nb0[3]
+
+                s = SManh3d(nb1[:3], posSeed)
+                assert s == nb1[3]
+
+                # seed position can now "grow" out to cover area that's in range of both nbs -- scan lines in xy, and then scan adjacent
+                #  xy lines at different z values
+
+                print "Growing points from {p}".format(p=posSeed)
+                setPos = SetPosGrow(posSeed, nb0, nb1, dX0, dY0, dZ0)
 
             print "Pair had {c} positions in common".format(c=len(setPos))
             assert len(setPos) > 0
+            lSetPos.append(setPos)
 
         # generate the intersection
 
@@ -3785,6 +3855,17 @@ def Day23b():
             setLeft &= setPos
 
         print "Remaining points: {c}".format(c=len(setLeft))
+
+        for pos in sorted(setPos, key=lambda x: sum([abs(y) for y in x])):
+            fInRange = True
+            for nb in lNb:
+                s = SManh3d(pos, nb[:3])
+                if s > nb[3]:
+                    fInRange = false
+                    break
+
+            if fInRange:
+                print "Pos {p} is in range of everyone, at distance {d}".format(p=pos, d=sum([abs(y) for y in pos]))
 
 if __name__ == '__main__':
     #Day23a()
