@@ -3496,6 +3496,404 @@ def Day22b():
 
     map0.ExtractTarget()
 
+def LNb23():
+    """Return list of nanobots (x,y,z,r) for the day's input"""
+
+    #lStr = ain.s_strIn23a.strip().split('\n')
+    #lStr = ain.s_strIn23b.strip().split('\n')
+    lStr = ain.s_strIn23.strip().split('\n')
+
+    reN = re.compile(r'pos=<(.*),(.*),(.*)>,\s*r=(.*)')
+
+    lNb = []
+    for str0 in lStr:
+        match = reN.search(str0)
+        if not match:
+            continue
+
+        lN = match.groups()
+        lNb.append(tuple([int(x) for x in lN]))
+
+    return lNb
+
+def SManh3d(pos0, pos1):
+    s = 0
+    for i in range(3):
+        s += abs(pos0[i] - pos1[i])
+
+    return s
+
+def Day23a():
+
+    lNb = LNb23()
+
+    # find the strongest (largest radius) nanobot
+
+    nbStrong = sorted(lNb, key=lambda x: x[3])[-1]
+
+    print "strongest nb: {n}".format(n=nbStrong)
+    print "  count: {c}".format(c=len(lNb))
+
+    # find how many nanobots are in range
+
+    cNb = 0
+    for nb in lNb:
+        if SManh3d(nb[:3], nbStrong[:3]) <= nbStrong[3]:
+            cNb += 1
+
+    # so, this worked fine for the example, but didn't work for my actual data. :/
+    # this produced 364, but that's apparently too low...?
+
+    # ah, found bug #1: my re wasn't accounting for negative values. great.
+
+    print "nb in range: {c}".format(c=cNb)
+
+def SetPosGrow(posSeed, nb0, nb1, dX, dY, dZ):
+    """Return set of positions that nb0 and nb1 share in common, scanning around near posSeed, with
+    dX, dY, and dZ being the vectors indicating the quadrant (from nb0) that touches nb1"""
+
+    # algorithm: for an in-range point, try to add the "planar" points surrounding it; any that
+    #  succeed will then also be attempted, etc.
+
+    setPos = set()
+    setPos.add(tuple(posSeed))
+
+    lPosOpen = [posSeed]
+
+    while lPosOpen:
+        pos0 = lPosOpen[0]
+        assert pos0 in setPos
+        lPosOpen = lPosOpen[1:]
+
+        for dPos in [(dX, -dY, 0), (-dX, dY, 0), (0, -dY, dZ), (0, dY, -dZ), (-dX, 0, dZ), (dX, 0, -dZ)]:
+            pos1 = tuple([pos0[i] + dPos[i] for i in range(3)])
+            if SManh3d(nb0, pos1) > nb0[3]:
+                continue
+
+            if SManh3d(nb1, pos1) > nb1[3]:
+                continue
+
+            if pos1 in setPos:
+                continue
+
+            # in range, not checked
+
+            setPos.add(pos1)
+            lPosOpen.append(pos1)
+
+            if len(setPos) % 10000 == 9999:
+                print "Found {d} common positions so far, open has {o}".format(d=len(setPos), o=len(lPosOpen))
+
+    return setPos
+
+def Day23b():
+    # calculate what points are in range of the maximal number of nb's, and then find
+    #  the manhattan distance from those to the origin, and report the smallest such number
+
+    # note: the radii and positions here are large, so simply enumerating all points in space that
+    #  work simply isn't likely going to be practical. Hmm.
+
+    # ok, but these aren't spheres. we're using manhattan distance, so all of these regions are cubes
+    #  (or skewed cubes), which mean their intersections are also cubes (or skewed cubes). perhaps there
+    #  is a clever way I could take that into account?
+
+    # I could also potentially determine which pairs of nbs are the furthest apart while still being in range,
+    #  and thus calculate smaller intersection "slices" that I should check for being in range of everything else.
+    #  The problem with that approach is that I'm not sure when to stop looking. I'm not convinced that I could
+    #  stop just as soon as I find something, because for starters there may well not be anything in range of all
+    #  of the nbs.
+
+    # I could maybe use aabb's to calculate smaller areas that overlap, and then check points within
+    #  those, but again, that's not really going to show me when to stop looking. :/
+
+    # OK, but wait, if these are all manhattan distance, then everything should be "diagonal planes" in terms of
+    #  what regions do or do not overlap. I may be able to use that to my advantage somehow, and check the limits
+    #  of those diagonals against other nbs to determine what the reduced overlaps look like?
+
+    lNb = LNb23()
+
+    # find the strongest (largest radius) nanobot
+
+    nbStrong = sorted(lNb, key=lambda x: x[3])[-1]
+
+    print "strongest nb: {n}".format(n=nbStrong)
+    print "  count: {c}".format(c=len(lNb))
+
+    # calculate some range information, just to see scale...
+
+    xRange = (nbStrong[0], nbStrong[0])
+    yRange = (nbStrong[1], nbStrong[1])
+    zRange = (nbStrong[2], nbStrong[2])
+
+    for nb in lNb:
+        xRange = (min(nb[0] - nb[3], xRange[0]), max(nb[0] + nb[3], xRange[1]))
+        yRange = (min(nb[1] - nb[3], yRange[0]), max(nb[1] + nb[3], yRange[1]))
+        zRange = (min(nb[2] - nb[3], zRange[0]), max(nb[2] + nb[3], zRange[1]))
+
+    print "Range: {x}, {y}, {z}, for {c:,} cells".format(x=xRange, y=yRange, z=zRange, c=(xRange[1] - xRange[0]) * (yRange[1] - yRange[0]) * (zRange[1] - zRange[0]))
+
+    # idea: calculate for each nb the set of overlapping nbs (calc manhattan distance between ctrs and compare to sum of ranges)
+    #  then, seeding from each nb, calculate the mutually-overlapping set
+    #  then, find the largest one(s) of those; these are the maximal nb overlap sets
+
+    print "Calculating overlap sets"
+
+    mpINbSetINb = []
+    for iNb0, nb0 in enumerate(lNb):
+        mpINbSetINb.append(set())
+        assert len(mpINbSetINb) == iNb0 + 1
+
+        for iNb1, nb1 in enumerate(lNb):
+            s = SManh3d(nb0[:3], nb1[:3])
+            sMax = nb0[3] + nb1[3]
+            if s <= sMax:
+                mpINbSetINb[-1].add(iNb1)
+
+    print "Calculating mutual overlap sets"
+
+    # NOTE (davidm) this step is expensive, but not outrageously so
+
+    lSetINb = []
+    for iNb0, setINb0 in enumerate(mpINbSetINb):
+        setINb = set()
+        setINb |= setINb0
+        for iNb1 in setINb0:
+            setINb &= mpINbSetINb[iNb1] # intersect: all reachable from everything else
+        lSetINb.append(setINb)
+
+    print "Calculating largest mutual overlap sets"
+
+    lSetINb.sort(key = lambda x: -len(x))
+    cIMost = len(lSetINb[0])
+    lSetExamine = []
+
+    for setINb in lSetINb:
+        if len(setINb) < cIMost:
+            break
+
+        if setINb not in lSetExamine:
+            lSetExamine.append(setINb)
+
+    print "Reduced to {c} possible sets of overlaps to examine with {e} elements each".format(c=len(lSetExamine), e=len(lSetExamine[0]))
+
+    # So, theoretically, if my logic is sound on determining mutually overlapping nb's, I can compute the mahattan distance to the point
+    # that would be nearest the origin by calculating the minimum range that would be required to create an nb that overlaps everything in
+    # the mutually overlapping set. This minimum range is the largest range necessary to intersect everything that's in the current set,
+    # based on the logic that if the point was closer to the origin than that, it wouldn't be in range of at least one of the source points
+    # that are known to mutually overlap. (It's quite possible that my logic here is flawed, though, and I'll have absolutely no idea of
+    # what *point* actually satisfies the constraint, which is kinda lame.)
+
+    # This gave 85761542 as its value, which was too low. I'm also trying with that value bumped by one (I'm unconvinced I get exactly the
+    # way the <= works for the maximum range), and if that doesn't work, then I'll have to scrap this entire approach and come up with something
+    # completely different (because my overlap argument may not be correct at that point).
+
+    # ...and 85761543 *was* the right answer. o.O Fantastic...I guess? Bleah, this was unsatisfying. I'm still not entirely convinced that
+    # this *actually* works, although if it doesn't, it sure got me within spitting distance of what I needed, which is bizarre.
+
+    for setINb in lSetExamine:
+        sRequired = 0
+        for iNb in setINb:
+            nb = lNb[iNb]
+            s = SManh3d(nb[:3], (0,0,0))
+            s -= nb[3]
+            sRequired = max(s, sRequired)
+
+        print "Minimum required range from zero is {s}".format(s=sRequired)
+
+def Unused23b():
+    """Stuff that didn't pan out when trying to solve 23b"""
+
+    for setINb in lSetExamine:
+        # Next, see if we can find a way to intersect out the area(s) that everything overlaps with; this gives us our sample points.
+        # I'm not sure how this will actually work. I might be able to find a small overlap (how?) as the seed set of points, and then
+        # reduce that down by colliding with consecutive members of the set, but I'm concerned that I might still have too large of a
+        # set of points to start with, so I might need to represent something as the intersected range somehow, which won't necessarily
+        # be a "nice" shape like the original nbs are.
+
+        # alt: if we calculate the intersected X ranges that can possibly be hit by all sets, and likewise the Y and Z, we might end
+        # up with a small enough set of points to consider that we could brute force at that point
+
+        iNb0 = list(setINb)[0]
+        nb0 = lNb[iNb0]
+        xRange = (nb0[0] - nb0[3], nb0[0] + nb0[3])
+        yRange = (nb0[1] - nb0[3], nb0[1] + nb0[3])
+        zRange = (nb0[2] - nb0[3], nb0[2] + nb0[3])
+
+        for iNb in setINb:
+            nb1 = lNb[iNb]
+            xRange = (max(xRange[0], nb1[0] - nb1[3]), min(xRange[1], nb1[0] + nb1[3]))
+            yRange = (max(yRange[0], nb1[1] - nb1[3]), min(yRange[1], nb1[1] + nb1[3]))
+            zRange = (max(zRange[0], nb1[2] - nb1[3]), min(zRange[1], nb1[2] + nb1[3]))
+
+        print "Known overlap: {c} cells".format(c=(xRange[1] - xRange[0]) * (yRange[1] - yRange[0]) * (zRange[1] - zRange[0]))
+
+        # Nope. 492 quintillion cells is too many to brute force. :)
+
+        # I'm going to look through the set of overlapping nb's and find which pairs have the least overlap, and see if that gives me anything
+        # like a reasonable set of points to start considering.
+
+        print "Calculating minimal overlap ranges"
+
+        lPair = []
+        liNb = list(setINb)
+        for iiNb0, iNb0 in enumerate(liNb):
+            iiNb1 = iiNb0 + 1
+            nb0 = lNb[iNb0]
+            while iiNb1 < len(liNb):
+                iNb1 = liNb[iiNb1]
+                nb1 = lNb[iNb1]
+
+                s = SManh3d(nb0[:3], nb1[:3])
+                sR = nb0[3] + nb1[3]
+
+                lPair.append((iNb0, iNb1, sR - s, min(nb0[3], nb1[3])))
+                iiNb1 += 1
+
+        print "Sorting minimal overlaps"
+
+        lPair.sort(key=lambda x: (x[2], x[3], x[0], x[1]))
+        for pair in lPair:
+            print "Pair {a} {b} has overlap of {o}, min radius {r}".format(a=pair[0], b=pair[1], o=pair[2], r=pair[3])
+            if pair[2] > 0:
+                break
+
+        # At this point, we have some pairs of nbs that overlap with one-cell-wide regions. I think that means that I can
+        # generate said overlaps into actual positions, and then intersect the sets that result to come up with something
+        # that's a more reasonable set of points to actually check. Maybe? Bleah. I feel like I'm making this waaaay too hard
+        # somehow, but I don't have a good intuitive grasp of how manhattan distance works.
+
+        print "Generating pair position overlaps"
+
+        lSetPos = []
+        for pair in lPair:
+            if pair[2] > 0:
+                break
+
+            iNb0 = pair[0]
+            iNb1 = pair[1]
+            nb0 = lNb[iNb0]
+            nb1 = lNb[iNb1]
+
+            if nb1[3] < nb0[3]:
+                nb0, nb1 = nb1, nb0
+
+            # nb0 has the smaller radius, and overlaps nb1 at exactly their respective range limits. determine which
+            # octant to check points in, and check all of them from nb0's limit against nb1, forming a set of points
+            # that are common to this pair
+
+            dX0 = 1 if nb0[0] < nb1[0] else -1
+            dY0 = 1 if nb0[1] < nb1[1] else -1
+            dZ0 = 1 if nb0[2] < nb1[2] else -1
+
+            print "nb pair: {a} and {b}".format(a=nb0, b=nb1)
+
+            setPos = set()
+            cPosCheck = 0
+
+            if False:
+                # This model works, but is way too slow, even with some fairly obvious speedups applied. I think what
+                # I need to do is adjust to something that is more specific to the stuff I know about the problem
+
+                for dX1 in range(nb0[3]):
+                    x1 = nb0[0] + dX0 * dX1
+                    if abs(x1 - nb1[0]) > nb1[3]:
+                        continue
+
+                    dOther = nb0[3] - dX1
+                    for dY1 in range(dOther + 1):
+                        y1 = nb0[1] + dY0 * dY1
+                        if abs(y1 - nb1[1]) > nb1[3]:
+                            continue
+
+                        dZ1 = dOther - dY1
+                        z1 = nb0[2] + dZ0 * dZ1
+                        if abs(z1 - nb1[2]) > nb1[3]:
+                            continue
+
+                        pos = (nb0[0] + dX0 * dX1, nb0[1] + dY0 * dY1, nb0[2] + dZ0 * dZ1)
+                        # assert SManh3d(pos, nb0[:3]) == nb0[3]
+
+                        #cPosCheck += 1
+                        #if cPosCheck % 100000 == 99999:
+                            #print "Checked {c} positions (at ({x}, {y}, {z})".format(c=cPosCheck, x=dX1, y=dY1, z=dZ1)
+
+                        if SManh3d(pos, nb1[:3]) <= nb1[3]:
+                            print "Adding pos {p} to overlap set".format(p=pos)
+                            setPos.add(pos)
+
+
+            if False:
+                # So, I got this to work, I think, except I gut off SetPosGrow after I saw this output from it:
+                # Found 7529999 common positions so far, open has 9503
+
+                # given the intersection here is a "plane" of cells, I should be able to do something where I calculate
+                # the "center point" of the intersection between the nbs, which should be at both of their ranges, and
+                # then use the relative offsets between the two to determine the orientation of the intersection plane,
+                # and then "grow" the intersecting region out from the intersect point along the plane in one dimension,
+                # repeating for offsets in the other dimension. That should give a much faster cutoff when determining
+                # which points are allowed and which aren't.
+
+                # basically, even the intersection points of a single pair of octahedrons is too big to process.
+
+                # calculate a point on the surface of nb0/nb1 that is "on" the segment between their centers
+
+                dPos = (nb1[0] - nb0[0], nb1[1] - nb0[1], nb1[2] - nb0[2])
+                sTotal = SManh3d(nb0[:3], nb1[:3])
+                assert sTotal == nb0[3] + nb1[3]
+
+                r = (1.0 * nb0[3]) / sTotal
+                dPos = [int(r * x) for x in dPos]
+                print "initial dpos: {d} ({s} vs {s2})".format(d=dPos, s=sum([abs(x) for x in dPos]), s2=nb0[3])
+
+                i = 0 if dPos[0] != 0 else 1
+                while sum([abs(x) for x in dPos]) > nb0[3]:
+                    print "reducing {i}".format(i=i)
+                    dPos[i] += 1 if dPos[i] < 0 else -1
+
+                while sum([abs(x) for x in dPos]) < nb0[3]:
+                    print "increasing {i}".format(i=i)
+                    dPos[i] += 1 if dPos[i] > 0 else -1
+
+                posSeed = (nb0[0] + dPos[0], nb0[1] + dPos[1], nb0[2] + dPos[2])
+                s = SManh3d(nb0[:3], posSeed)
+                assert s == nb0[3]
+
+                s = SManh3d(nb1[:3], posSeed)
+                assert s == nb1[3]
+
+                # seed position can now "grow" out to cover area that's in range of both nbs -- scan lines in xy, and then scan adjacent
+                #  xy lines at different z values
+
+                print "Growing points from {p}".format(p=posSeed)
+                setPos = SetPosGrow(posSeed, nb0, nb1, dX0, dY0, dZ0)
+
+            print "Pair had {c} positions in common".format(c=len(setPos))
+            assert len(setPos) > 0
+            lSetPos.append(setPos)
+
+        # generate the intersection
+
+        print "Generating reduced search set"
+
+        setLeft = set()
+        setLeft |= lSetPos[0]
+
+        for setPos in lSetPos:
+            setLeft &= setPos
+
+        print "Remaining points: {c}".format(c=len(setLeft))
+
+        for pos in sorted(setPos, key=lambda x: sum([abs(y) for y in x])):
+            fInRange = True
+            for nb in lNb:
+                s = SManh3d(pos, nb[:3])
+                if s > nb[3]:
+                    fInRange = false
+                    break
+
+            if fInRange:
+                print "Pos {p} is in range of everyone, at distance {d}".format(p=pos, d=sum([abs(y) for y in pos]))
+
 if __name__ == '__main__':
-    Day22a()
-    Day22b()
+    #Day23a()
+    Day23b()
