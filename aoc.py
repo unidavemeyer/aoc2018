@@ -3630,7 +3630,7 @@ def Day23b():
         yRange = (min(nb[1] - nb[3], yRange[0]), max(nb[1] + nb[3], yRange[1]))
         zRange = (min(nb[2] - nb[3], zRange[0]), max(nb[2] + nb[3], zRange[1]))
 
-    print "Range: {x}, {y}, {z}, for {c} cells".format(x=xRange, y=yRange, z=zRange, c=(xRange[1] - xRange[0]) * (yRange[1] - yRange[0]) * (zRange[1] - zRange[0]))
+    print "Range: {x}, {y}, {z}, for {c:,} cells".format(x=xRange, y=yRange, z=zRange, c=(xRange[1] - xRange[0]) * (yRange[1] - yRange[0]) * (zRange[1] - zRange[0]))
 
     # idea: calculate for each nb the set of overlapping nbs (calc manhattan distance between ctrs and compare to sum of ranges)
     #  then, seeding from each nb, calculate the mutually-overlapping set
@@ -3675,6 +3675,33 @@ def Day23b():
             lSetExamine.append(setINb)
 
     print "Reduced to {c} possible sets of overlaps to examine with {e} elements each".format(c=len(lSetExamine), e=len(lSetExamine[0]))
+
+    # So, theoretically, if my logic is sound on determining mutually overlapping nb's, I can compute the mahattan distance to the point
+    # that would be nearest the origin by calculating the minimum range that would be required to create an nb that overlaps everything in
+    # the mutually overlapping set. This minimum range is the largest range necessary to intersect everything that's in the current set,
+    # based on the logic that if the point was closer to the origin than that, it wouldn't be in range of at least one of the source points
+    # that are known to mutually overlap. (It's quite possible that my logic here is flawed, though, and I'll have absolutely no idea of
+    # what *point* actually satisfies the constraint, which is kinda lame.)
+
+    # This gave 85761542 as its value, which was too low. I'm also trying with that value bumped by one (I'm unconvinced I get exactly the
+    # way the <= works for the maximum range), and if that doesn't work, then I'll have to scrap this entire approach and come up with something
+    # completely different (because my overlap argument may not be correct at that point).
+
+    # ...and 85761543 *was* the right answer. o.O Fantastic...I guess? Bleah, this was unsatisfying. I'm still not entirely convinced that
+    # this *actually* works, although if it doesn't, it sure got me within spitting distance of what I needed, which is bizarre.
+
+    for setINb in lSetExamine:
+        sRequired = 0
+        for iNb in setINb:
+            nb = lNb[iNb]
+            s = SManh3d(nb[:3], (0,0,0))
+            s -= nb[3]
+            sRequired = max(s, sRequired)
+
+        print "Minimum required range from zero is {s}".format(s=sRequired)
+
+def Unused23b():
+    """Stuff that didn't pan out when trying to solve 23b"""
 
     for setINb in lSetExamine:
         # Next, see if we can find a way to intersect out the area(s) that everything overlaps with; this gives us our sample points.
@@ -3795,16 +3822,16 @@ def Day23b():
                             setPos.add(pos)
 
 
-            if True:
+            if False:
+                # So, I got this to work, I think, except I gut off SetPosGrow after I saw this output from it:
+                # Found 7529999 common positions so far, open has 9503
+
                 # given the intersection here is a "plane" of cells, I should be able to do something where I calculate
                 # the "center point" of the intersection between the nbs, which should be at both of their ranges, and
                 # then use the relative offsets between the two to determine the orientation of the intersection plane,
                 # and then "grow" the intersecting region out from the intersect point along the plane in one dimension,
                 # repeating for offsets in the other dimension. That should give a much faster cutoff when determining
                 # which points are allowed and which aren't.
-
-                # So, I got this to work, I think, except I gut off SetPosGrow after I saw this output from it:
-                # Found 7529999 common positions so far, open has 9503
 
                 # basically, even the intersection points of a single pair of octahedrons is too big to process.
 
