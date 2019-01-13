@@ -3894,6 +3894,188 @@ def Unused23b():
             if fInRange:
                 print "Pos {p} is in range of everyone, at distance {d}".format(p=pos, d=sum([abs(y) for y in pos]))
 
+def LArmy24():
+    """Return the list of armies (immune and infection) which in turn are a list of groups."""
+
+    reGroup = re.compile(r'^(\d+) [^\d]* (\d+) [^\d]* does (\d+) (\S+)[^\d]* (\d+)$', re.MULTILINE)
+
+    lArmy = []
+
+    for str0 in ain.s_strIn24b.strip().split('\n'):
+        if str0.strip() == '':
+            continue
+
+        if 'Immune System:' in str0:
+            lArmy.append({ 'type' : 'Immune', 'groups' : [] })
+        elif 'Infection:' in str0:
+            lArmy.append({ 'type' : 'Infection', 'groups' : [] })
+        else:
+            match = reGroup.search(str0)
+            if not match:
+                continue
+
+            group = {
+                'units' : int(match.group(1)),
+                'hp' : int(match.group(2)),
+                'dmg' : int(match.group(3)),
+                'dtype' : match.group(4),
+                'init' : int(match.group(5)),
+                'type' : lArmy[-1]['type'],
+            }
+
+            if '(' in str0:
+                str1 = str0.split('(')[-1].split(')')[0]
+                lStr = str1.split(';')
+                for str2 in lStr:
+                    lWord = str2.split()
+                    lWord = [word.replace(',', '') for word in lWord]
+                    group[lWord[0]] = lWord[2:]
+
+            lArmy[-1]['groups'].append(group)
+
+    assert(len(lArmy) == 2)
+
+    return lArmy
+
+def TargSel24(lArmy):
+    """Run target selection on the given list of armies"""
+
+    # sort by decreasing effective power, tie broken with higher initiative; this will be the order
+    #  through target selection
+
+    for army in lArmy:
+        army['groups'].sort(key=lambda g: (-g['units'] * g['dmg'], -g['init']))
+
+    # determine the (at most one) target for each group
+
+    tsel = []
+    for iArmy, army in enumerate(lArmy):
+        lGroup = army['groups']
+
+        armyOther = lArmy[1 - iArmy]
+        lGroupOther = armyOther['groups']
+
+        setIGroup = set()
+        mpIGroupIGroup = {}
+
+        for iGroup, group in enumerate(lGroup):
+            lTarg = []
+            for iGroupOther, groupOther in enumerate(lGroupOther):
+                if iGroupOther in setIGroup:
+                    continue
+
+                # calculate damage that would be taken by groupOther if attacked by group
+
+                dmg = group['dmg'] * group['units']
+                if group['dtype'] in groupOther.get('immune', []):
+                    dmg = 0
+                elif group['dtype'] in groupOther.get('weak', []):
+                    dmg *= 2
+
+                # print "army {i} group {g} attack {j} at {d}".format(i=iArmy, g=iGroup, j=iGroupOther, d=dmg)
+
+                lTarg.append((dmg, groupOther['dmg'] * groupOther['units'], groupOther['init'], iGroupOther))
+
+            if not lTarg:
+                continue
+
+            lTarg.sort(key=lambda t: (-t[0], -t[1], -t[2]))
+            if lTarg[0][0] > 0:
+                # print "group {a}:{g} attack {t}".format(a=iArmy, g=iGroup, t=lTarg[0][3])
+                mpIGroupIGroup[iGroup] = lTarg[0][3]
+                setIGroup.add(lTarg[0][3])
+
+        tsel.append(mpIGroupIGroup)
+
+    return tsel
+
+def Attack24(lArmy, tsel):
+    """Run an attack sequence on the given list of armies"""
+
+    # sort all of the groups together by initiative
+
+    lOrder = []
+    for army in lArmy:
+        for iGroup, group in enumerate(army['groups']):
+            lOrder.append((iGroup, group))
+
+    lOrder.sort(key=lambda o: -o[1]['init'])
+
+    # resolve individual combat actions
+
+    for order in lOrder:
+        iGroup = order[0]
+        group = order[1]
+
+        if 'mmune' in group['type']:
+            iGroupTarget = tsel[0].get(iGroup, None)
+            iArmyTarget = 1
+        else:
+            iGroupTarget = tsel[1].get(iGroup, None)
+            iArmyTarget = 0
+
+        if iGroupTarget is None:
+            continue
+
+        # remove a whole number of units based on damage dealt and hp
+
+        groupOther = lArmy[iArmyTarget]['groups'][iGroupTarget]
+
+        dmg = group['dmg'] * group['units']
+
+        assert group['dtype'] not in groupOther.get('immune', [])
+
+        if group['dtype'] in groupOther.get('weak', []):
+            dmg *= 2
+
+        cUnit = dmg // groupOther['hp']
+        groupOther['units'] -= cUnit
+
+    # clean up any groups that are now destroyed
+
+    for army in lArmy:
+        army['groups'] = [group for group in army['groups'] if group['units'] > 0]
+
+def Fight24(lArmy):
+    """Run a single phase of the fight between the two armies"""
+
+    tsel = TargSel24(lArmy)
+    Attack24(lArmy, tsel)
+
+    if False:
+        for army in lArmy:
+            print 'Army {}'.format(army['type'])
+            for group in army['groups']:
+                print '  {}'.format(group)
+
+def Day24a():
+    lArmy = LArmy24()
+
+    if True:
+        for army in lArmy:
+            print 'Army {}'.format(army['type'])
+            for group in army['groups']:
+                print '  {}'.format(group)
+
+    cRound = 0
+    mpArmyCu = [0, 0]
+
+    while True:
+        cRound += 1
+        Fight24(lArmy)
+        for iArmy, army in enumerate(lArmy):
+            cuNew = sum([group['units'] for group in army['groups']])
+            if mpArmyCu[iArmy] == cuNew:
+                print "Ack! No progress?"
+            mpArmyCu[iArmy] = cuNew
+            if mpArmyCu[iArmy] == 0:
+                break
+
+    print "Combat ended after round {r}, units were {u}".format(r=cRound, u=mpArmyCu)
+
+def Day24b():
+    pass
+
 if __name__ == '__main__':
-    #Day23a()
-    Day23b()
+    Day24a()
+    Day24b()
