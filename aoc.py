@@ -4007,6 +4007,10 @@ def Attack24(lArmy, tsel):
         iGroup = order[0]
         group = order[1]
 
+        if group['units'] < 1:
+            # dead armies cannot fight
+            continue
+
         if 'mmune' in group['type']:
             iGroupTarget = tsel[0].get(iGroup, None)
             iArmyTarget = 1
@@ -4042,7 +4046,7 @@ def Fight24(lArmy):
     tsel = TargSel24(lArmy)
     Attack24(lArmy, tsel)
 
-    if False:
+    if True:
         for army in lArmy:
             print 'Army {}'.format(army['type'])
             for group in army['groups']:
@@ -4060,13 +4064,16 @@ def Day24a():
     cRound = 0
     mpArmyCu = [0, 0]
 
-    while True:
+    cRoundSame = 0
+    while cRoundSame < 20:
         cRound += 1
+        print "Round {r}".format(r=cRound)
         Fight24(lArmy)
         for iArmy, army in enumerate(lArmy):
             cuNew = sum([group['units'] for group in army['groups']])
             if mpArmyCu[iArmy] == cuNew:
-                print "Ack! No progress?"
+                print "Ack! No progress on {i}?".format(i=iArmy)
+                cRoundSame += 1
             mpArmyCu[iArmy] = cuNew
             if mpArmyCu[iArmy] == 0:
                 break
