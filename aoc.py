@@ -4136,6 +4136,95 @@ def Day24b():
 
         boostCur = (boostMax + boostMin) // 2
 
+def SManhAny(pos0, pos1):
+    if len(pos0) != len(pos1):
+        raise Exception("Differing lengths: {a} vs {b}".format(a=len(pos0), b=len(pos1)))
+
+    s = 0
+    for i, g in enumerate(pos0):
+        s += abs(g - pos1[i])
+
+    return s
+
+def LPos25():
+    """Return the list of points (tuples of integers) for day 25"""
+
+    lPos = []
+    for str0 in ain.s_strIn25e.strip().split('\n'):
+        lN = [int(x) for x in str0.strip().split(',')]
+        lPos.append(tuple(lN))
+
+    return lPos
+
+class CMergeSet:
+    """Merge set class for fixed-size-set merging calculations"""
+
+    def __init__(self, c):
+        self.m_lIRoot = []
+        for i in range(c):
+            self.m_lIRoot.append(i)
+
+    def Merge(self, i0, i1):
+        # find roots for i0 and i1
+
+        i0Root = i0
+        while self.m_lIRoot[i0Root] != i0Root:
+            i0Root = self.m_lIRoot[i0Root]
+
+        i1Root = i1
+        while self.m_lIRoot[i1Root] != i1Root:
+            i1Root = self.m_lIRoot[i1Root]
+
+        if i1Root == i0Root:
+            # already merged, nothing to do
+            return
+
+        # always put higher indices as children of lower indices -- doesn't matter,
+        #  really, but keeps my mind a bit more organized
+
+        if i0Root > i1Root:
+            i0Root, i1Root = i1Root, i0Root
+
+        # make i1Root a child of i0Root
+
+        self.m_lIRoot[i1Root] = i0Root
+
+    def Flatten(self):
+        """Set every element to have its root as its index, so there are no intermediates"""
+
+        for i in range(len(self.m_lIRoot)):
+            iRoot = i
+            while self.m_lIRoot[iRoot] != iRoot:
+                iRoot = self.m_lIRoot[iRoot]
+            assert self.m_lIRoot[iRoot] == iRoot
+            self.m_lIRoot[i] = iRoot
+
+    def LIRoot(self):
+        return [i for i, iRoot in enumerate(self.m_lIRoot) if i == iRoot]
+
+def Day25a():
+    """Calculate "constellation" chains in 4-d manhattan distance"""
+
+    sConst = 3
+
+    lPos = LPos25()
+    mset = CMergeSet(len(lPos))
+
+    for iPos0, pos0 in enumerate(lPos):
+        iPos1 = iPos0 + 1
+        while iPos1 < len(lPos):
+            pos1 = lPos[iPos1]
+            if SManhAny(pos0, pos1) <= sConst:
+                mset.Merge(iPos0, iPos1)
+            iPos1 += 1
+
+    mset.Flatten()
+    lIRoot = mset.LIRoot()
+    print "Roots: {c} {r}".format(c=len(lIRoot), r=lIRoot)
+
+def Day25b():
+    pass
+
 if __name__ == '__main__':
-    #Day24a()
-    Day24b()
+    Day25a()
+    Day25b()
