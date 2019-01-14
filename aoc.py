@@ -4046,7 +4046,7 @@ def Fight24(lArmy):
     tsel = TargSel24(lArmy)
     Attack24(lArmy, tsel)
 
-    if True:
+    if False:
         for army in lArmy:
             print 'Army {}'.format(army['type'])
             for group in army['groups']:
@@ -4081,8 +4081,61 @@ def Day24a():
     print "Combat ended after round {r}, units were {u}".format(r=cRound, u=mpArmyCu)
 
 def Day24b():
-    pass
+
+    # try a binary search to find the boost that will cause a win
+
+    # actually, I'm not convinced that this will work. I'm trying it anyway, but I'm not convinced.
+
+    boostMin = 1
+    boostMax = 2000
+    boostCur = (boostMax + boostMin) // 2
+
+    while boostMin < boostMax:
+        lArmy = LArmy24()
+
+        for group in lArmy[0]['groups']:
+            group['dmg'] += boostCur
+
+        cRound = 0
+        mpArmyCu = [0, 0]
+
+        fComplete = False
+        while not fComplete:
+            cRound += 1
+            print "Round {r}".format(r=cRound)
+            Fight24(lArmy)
+            cArmyProgress = 0
+            for iArmy, army in enumerate(lArmy):
+                cuNew = sum([group['units'] for group in army['groups']])
+                if mpArmyCu[iArmy] == cuNew:
+                    print "Ack! No progress on {i}?".format(i=iArmy)
+                else:
+                    cArmyProgress += 1
+                mpArmyCu[iArmy] = cuNew
+                if mpArmyCu[iArmy] == 0:
+                    fComplete = True
+                    break
+            if cArmyProgress == 0:
+                print "ACK! NO PROGRESS ON EITHER ARMY! BAILING!"
+                break
+
+        print "Combat ended after round {r}, units were {u}, boost was {b}".format(r=cRound, u=mpArmyCu, b=boostCur)
+
+        if mpArmyCu[1] < 1:
+            # immune system won
+            boostMax = boostCur
+        elif mpArmyCu[0] < 1:
+            # infection won
+            boostMin = boostCur + 1
+        else:
+            # uh...hmm. we stalemated. I guess that means we're not strong enough? not super clear. we'll
+            #  try that logic for now, but I'm not convinced.
+            boostMin = boostCur + 1
+
+        # pick the new midpoint to try
+
+        boostCur = (boostMax + boostMin) // 2
 
 if __name__ == '__main__':
-    Day24a()
+    #Day24a()
     Day24b()
